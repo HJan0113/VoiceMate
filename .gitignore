@@ -3,6 +3,12 @@
 .env.local
 *.env
 
+# Node workspace
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
 # Binaries
 voicemate
 *.exe

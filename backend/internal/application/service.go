@@ -1,0 +1,89 @@
+package application
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/kurodakayn/voicemate/internal/domain"
+)
+
+var ErrSessionNotFound = errors.New("session not found")
+
+type Service struct {
+	mu            sync.RWMutex
+	characters    []domain.Character
+	sessions      map[string]domain.Session
+	conversations map[string]domain.Conversation
+}
+
+func NewService() *Service {
+	return &Service{
+		characters: []domain.Character{{
+			ID: "furina", Slug: "furina", DisplayName: "芙宁娜", Status: "active", VoiceProfile: "qiniu-placeholder",
+			EmotionProfiles: map[string]domain.EmotionProfile{
+				"proud":    {Video: "/assets/characters/furina/proud.mp4", PlaybackRate: 1.08},
+				"thinking": {Video: "/assets/characters/furina/thinking.mp4", PlaybackRate: 1},
+			},
+		}}, sessions: map[string]domain.Session{}, conversations: map[string]domain.Conversation{},
+	}
+}
+
+func (s *Service) ListCharacters() []domain.Character {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]domain.Character, len(s.characters))
+	copy(result, s.characters)
+	return result
+}
+
+func (s *Service) CreateSession(characterID, conversationID string) (domain.Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if characterID == "" {
+		characterID = "furina"
+	}
+	found := false
+	for _, character := range s.characters {
+		if character.ID == characterID && character.Status == "active" {
+			found = true
+		}
+	}
+	if !found {
+		return domain.Session{}, errors.New("character not found")
+	}
+	if conversationID == "" {
+		conversationID = "conv_" + randomID()
+	}
+	if _, ok := s.conversations[conversationID]; !ok {
+		s.conversations[conversationID] = domain.Conversation{ID: conversationID, CharacterID: characterID, Title: "新的对话", CreatedAt: time.Now().UTC()}
+	}
+	now := time.Now().UTC()
+	session := domain.Session{ID: "sess_" + randomID(), ConversationID: conversationID, CharacterID: characterID, EphemeralToken: "et_" + randomID(), ExpiresAt: now.Add(5 * time.Minute)}
+	s.sessions[session.ID] = session
+	return session, nil
+}
+
+func (s *Service) VerifySession(id, token string) (domain.Session, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	session, ok := s.sessions[id]
+	if !ok || session.EphemeralToken != token || time.Now().UTC().After(session.ExpiresAt) {
+		return domain.Session{}, ErrSessionNotFound
+	}
+	return session, nil
+}
+
+func (s *Service) Conversations() []domain.Conversation {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]domain.Conversation, 0, len(s.conversations))
+	for _, item := range s.conversations {
+		result = append(result, item)
+	}
+	return result
+}
+
+func randomID() string { var b [8]byte; _, _ = rand.Read(b[:]); return hex.EncodeToString(b[:]) }

@@ -1,0 +1,79 @@
+package fake
+
+import (
+	"context"
+	"encoding/binary"
+	"math"
+	"sync"
+
+	"github.com/kurodakayn/voicemate/internal/provider"
+)
+
+type Provider struct{}
+
+func NewProvider() *Provider { return &Provider{} }
+
+func (*Provider) Open(_ context.Context, _ string, turnID string) (provider.Stream, error) {
+	return newStream(turnID), nil
+}
+
+type stream struct {
+	turnID string
+	events chan provider.Event
+	cancel chan struct{}
+	stop   sync.Once
+	close  sync.Once
+}
+
+func newStream(turnID string) *stream {
+	return &stream{turnID: turnID, events: make(chan provider.Event, 16), cancel: make(chan struct{})}
+}
+
+func (s *stream) SendAudio(_ []byte) error      { return nil }
+func (s *stream) Events() <-chan provider.Event { return s.events }
+func (s *stream) Interrupt()                    { s.stop.Do(func() { close(s.cancel) }) }
+func (s *stream) Close() {
+	s.close.Do(func() {
+		s.Interrupt()
+		close(s.events)
+	})
+}
+
+func (s *stream) Stop() {
+	go s.respond()
+}
+
+func (s *stream) respond() {
+	defer s.Close()
+	select {
+	case <-s.cancel:
+		return
+	default:
+		s.emit(provider.Event{Type: "transcript.final", TurnID: s.turnID, Text: "（演示）你好，今天想和我聊点什么？"})
+		s.emit(provider.Event{Type: "response.delta", TurnID: s.turnID, Text: "（演示）你好，今天想和我聊点什么？"})
+		s.emit(provider.Event{Type: "emotion.changed", TurnID: s.turnID, Emotion: "proud", Intensity: 0.72})
+		s.emit(provider.Event{Type: "audio.meta", TurnID: s.turnID, StreamID: 1, Codec: "pcm_s16le", SampleRate: 24000})
+		for seq := uint32(0); seq < 12; seq++ {
+			s.emit(provider.Event{Type: "audio.chunk", TurnID: s.turnID, StreamID: 1, Sequence: seq, Audio: tone(seq)})
+		}
+		s.emit(provider.Event{Type: "audio.end", TurnID: s.turnID, StreamID: 1})
+		s.emit(provider.Event{Type: "turn.completed", TurnID: s.turnID})
+	}
+}
+
+func (s *stream) emit(event provider.Event) {
+	select {
+	case s.events <- event:
+	case <-s.cancel:
+	}
+}
+
+func tone(chunk uint32) []byte {
+	const samples = 480
+	data := make([]byte, samples*2)
+	for i := 0; i < samples; i++ {
+		value := int16(math.Sin(float64(chunk*samples+uint32(i))*2*math.Pi*440/24000) * 5000)
+		binary.LittleEndian.PutUint16(data[i*2:], uint16(value))
+	}
+	return data
+}
