@@ -3,13 +3,13 @@ package realtime
 import (
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+
 	"github.com/kurodakayn/voicemate/internal/application"
 	"github.com/kurodakayn/voicemate/internal/provider"
 )
@@ -37,7 +37,7 @@ func (s *Server) Handle(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	defer connection.Close()
+	defer func() { _ = connection.Close() }()
 	_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, raw, err := connection.ReadMessage()
 	if err != nil {
@@ -123,7 +123,7 @@ func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, 
 			header[1] = 2
 			binary.BigEndian.PutUint32(header[4:8], event.StreamID)
 			binary.BigEndian.PutUint32(header[8:12], event.Sequence)
-			binary.BigEndian.PutUint32(header[12:16], uint32(len(event.Audio)))
+			binary.BigEndian.PutUint32(header[12:16], uint32(len(event.Audio))) //nolint:gosec // audio chunk payload length fits in uint32
 			_ = connection.WriteMessage(websocket.BinaryMessage, append(header, event.Audio...))
 		case "audio.meta":
 			_ = connection.WriteJSON(gin.H{"type": event.Type, "turnId": event.TurnID, "streamId": event.StreamID, "codec": event.Codec, "sampleRate": event.SampleRate})
@@ -143,5 +143,3 @@ func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, 
 		writeMu.Unlock()
 	}
 }
-
-func _compileGuard() { _ = fmt.Sprintf("%s", "realtime") }

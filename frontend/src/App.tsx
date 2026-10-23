@@ -199,9 +199,7 @@ function App() {
           <span className="mic-ring">
             {connection === "listening" ? "■" : "◉"}
           </span>
-          <span>
-            {connection === "ready" ? "按住说话" : talkLabel}
-          </span>
+          <span>{connection === "ready" ? "按住说话" : talkLabel}</span>
         </button>
       </section>
       <footer>

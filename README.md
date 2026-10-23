@@ -24,4 +24,16 @@ cd backend
 go run ./cmd/voicemate   # http://localhost:8080
 ```
 
+前端质量检查：
+
+```bash
+cd frontend
+pnpm format        # 按项目规则格式化 TypeScript / TSX
+pnpm format:check  # 只检查格式，不修改文件
+pnpm lint          # oxlint
+pnpm exec lefthook install
+```
+
+`lefthook.yml` 会在提交前自动运行前后端格式化和 lint；前端的规则配置位于 `frontend/.oxlintrc.json` 和 `frontend/.oxfmtrc.json`。
+
 HTTP 与 WebSocket contract：[`backend/openapi.yaml`](backend/openapi.yaml)。后端启动后也可访问 `http://localhost:8080/openapi.yaml`。

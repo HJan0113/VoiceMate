@@ -3,13 +3,13 @@ pre-commit:
     backend-format:
       root: "backend/"
       glob: "*.go"
-      run: gofmt -w {staged_files}
+      run: golangci-lint fmt {staged_files}
       stage_fixed: true
 
     backend-lint:
       root: "backend/"
       glob: "*.go"
-      run: go vet ./...
+      run: golangci-lint run
 
     frontend-format:
       root: "frontend/"

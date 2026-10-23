@@ -53,7 +53,7 @@ func (s *stream) respond() {
 		s.emit(provider.Event{Type: "response.delta", TurnID: s.turnID, Text: "（演示）你好，今天想和我聊点什么？"})
 		s.emit(provider.Event{Type: "emotion.changed", TurnID: s.turnID, Emotion: "proud", Intensity: 0.72})
 		s.emit(provider.Event{Type: "audio.meta", TurnID: s.turnID, StreamID: 1, Codec: "pcm_s16le", SampleRate: 24000})
-		for seq := uint32(0); seq < 12; seq++ {
+		for seq := range uint32(12) {
 			s.emit(provider.Event{Type: "audio.chunk", TurnID: s.turnID, StreamID: 1, Sequence: seq, Audio: tone(seq)})
 		}
 		s.emit(provider.Event{Type: "audio.end", TurnID: s.turnID, StreamID: 1})
@@ -71,9 +71,9 @@ func (s *stream) emit(event provider.Event) {
 func tone(chunk uint32) []byte {
 	const samples = 480
 	data := make([]byte, samples*2)
-	for i := 0; i < samples; i++ {
-		value := int16(math.Sin(float64(chunk*samples+uint32(i))*2*math.Pi*440/24000) * 5000)
-		binary.LittleEndian.PutUint16(data[i*2:], uint16(value))
+	for i := range uint32(samples) {
+		value := int16(math.Sin(float64(chunk*samples+i)*2*math.Pi*440/24000) * 5000)
+		binary.LittleEndian.PutUint16(data[i*2:], uint16(value)) //nolint:gosec // intentional int16 to uint16 bit pattern conversion for PCM s16le
 	}
 	return data
 }

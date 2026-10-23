@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/kurodakayn/voicemate/internal/application"
 )
 
@@ -17,6 +18,7 @@ func (h *Handler) Ready(c *gin.Context) {
 }
 
 func (h *Handler) Anonymous(c *gin.Context) {
+	//nolint:gosec // placeholder development tokens for scaffolded anonymous auth endpoint
 	c.JSON(http.StatusOK, gin.H{"accessToken": "dev-access-token", "refreshToken": "dev-refresh-token", "deviceId": "dev-device"})
 }
 
