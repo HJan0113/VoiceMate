@@ -1,0 +1,21 @@
+# Binaries
+voicemate
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and temporary binaries
+*.test
+/tmp/
+
+# OS and IDE files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+*.log
