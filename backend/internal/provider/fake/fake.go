@@ -18,33 +18,45 @@ func (*Provider) Open(_ context.Context, _ string, turnID string) (provider.Stre
 }
 
 type stream struct {
-	turnID string
-	events chan provider.Event
-	cancel chan struct{}
-	stop   sync.Once
-	close  sync.Once
+	turnID  string
+	events  chan provider.Event
+	cancel  chan struct{}
+	trigger chan struct{}
+	stop    sync.Once
+	close   sync.Once
 }
 
 func newStream(turnID string) *stream {
-	return &stream{turnID: turnID, events: make(chan provider.Event, 16), cancel: make(chan struct{})}
+	s := &stream{
+		turnID:  turnID,
+		events:  make(chan provider.Event, 16),
+		cancel:  make(chan struct{}),
+		trigger: make(chan struct{}),
+	}
+	go s.run()
+	return s
 }
 
 func (s *stream) SendAudio(_ []byte) error      { return nil }
 func (s *stream) Events() <-chan provider.Event { return s.events }
-func (s *stream) Interrupt()                    { s.stop.Do(func() { close(s.cancel) }) }
-func (s *stream) Close() {
-	s.close.Do(func() {
-		s.Interrupt()
-		close(s.events)
-	})
-}
+func (s *stream) Interrupt()                    { s.close.Do(func() { close(s.cancel) }) }
+func (s *stream) Close()                        { s.Interrupt() }
 
 func (s *stream) Stop() {
-	go s.respond()
+	s.stop.Do(func() { close(s.trigger) })
+}
+
+func (s *stream) run() {
+	defer close(s.events)
+	select {
+	case <-s.cancel:
+		return
+	case <-s.trigger:
+		s.respond()
+	}
 }
 
 func (s *stream) respond() {
-	defer s.Close()
 	select {
 	case <-s.cancel:
 		return

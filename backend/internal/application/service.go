@@ -61,16 +61,28 @@ func (s *Service) CreateSession(characterID, conversationID string) (domain.Sess
 		s.conversations[conversationID] = domain.Conversation{ID: conversationID, CharacterID: characterID, Title: "新的对话", CreatedAt: time.Now().UTC()}
 	}
 	now := time.Now().UTC()
+	for id, existing := range s.sessions {
+		if now.After(existing.ExpiresAt) {
+			delete(s.sessions, id)
+		}
+	}
 	session := domain.Session{ID: "sess_" + randomID(), ConversationID: conversationID, CharacterID: characterID, EphemeralToken: "et_" + randomID(), ExpiresAt: now.Add(5 * time.Minute)}
 	s.sessions[session.ID] = session
 	return session, nil
 }
 
 func (s *Service) VerifySession(id, token string) (domain.Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	session, ok := s.sessions[id]
-	if !ok || session.EphemeralToken != token || time.Now().UTC().After(session.ExpiresAt) {
+	if !ok {
+		return domain.Session{}, ErrSessionNotFound
+	}
+	if time.Now().UTC().After(session.ExpiresAt) {
+		delete(s.sessions, id)
+		return domain.Session{}, ErrSessionNotFound
+	}
+	if session.EphemeralToken != token {
 		return domain.Session{}, ErrSessionNotFound
 	}
 	return session, nil

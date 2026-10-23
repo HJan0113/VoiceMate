@@ -25,12 +25,15 @@ func NewServer(app *application.Service, p provider.Provider) *Server {
 }
 
 type control struct {
-	Type         string `json:"type"`
-	Token        string `json:"token,omitempty"`
-	TurnID       string `json:"turnId,omitempty"`
-	ClientTurnID string `json:"clientTurnId,omitempty"`
-	Reason       string `json:"reason,omitempty"`
+	Type            string `json:"type"`
+	Token           string `json:"token,omitempty"`
+	ProtocolVersion int    `json:"protocolVersion,omitempty"`
+	TurnID          string `json:"turnId,omitempty"`
+	ClientTurnID    string `json:"clientTurnId,omitempty"`
+	Reason          string `json:"reason,omitempty"`
 }
+
+const maxMessageBytes = 64 * 1024
 
 func (s *Server) Handle(c *gin.Context) {
 	connection, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -38,6 +41,7 @@ func (s *Server) Handle(c *gin.Context) {
 		return
 	}
 	defer func() { _ = connection.Close() }()
+	connection.SetReadLimit(maxMessageBytes)
 	_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, raw, err := connection.ReadMessage()
 	if err != nil {
@@ -46,6 +50,10 @@ func (s *Server) Handle(c *gin.Context) {
 	var auth control
 	if json.Unmarshal(raw, &auth) != nil || auth.Type != "auth" {
 		_ = connection.WriteJSON(gin.H{"type": "error", "code": "AUTH_REQUIRED"})
+		return
+	}
+	if auth.ProtocolVersion != 1 {
+		_ = connection.WriteJSON(gin.H{"type": "error", "code": "UNSUPPORTED_PROTOCOL_VERSION"})
 		return
 	}
 	session, err := s.app.VerifySession(c.Query("sessionId"), auth.Token)
@@ -65,14 +73,33 @@ func (s *Server) Handle(c *gin.Context) {
 	for {
 		messageType, data, readErr := connection.ReadMessage()
 		if readErr != nil {
-			if stream != nil {
-				stream.Close()
+			streamMu.Lock()
+			active := stream
+			streamMu.Unlock()
+			if active != nil {
+				active.Close()
 			}
 			return
 		}
 		if messageType == websocket.BinaryMessage {
-			if stream != nil {
-				_ = stream.SendAudio(data)
+			payload, ok := parseUplinkAudioFrame(data)
+			if !ok {
+				_ = writeJSON(gin.H{"type": "error", "code": "INVALID_AUDIO_FRAME"})
+				continue
+			}
+			streamMu.Lock()
+			active := stream
+			streamMu.Unlock()
+			if active != nil {
+				if err := active.SendAudio(payload); err != nil {
+					active.Close()
+					streamMu.Lock()
+					if stream == active {
+						stream = nil
+					}
+					streamMu.Unlock()
+					_ = writeJSON(gin.H{"type": "error", "code": "UPSTREAM_UNAVAILABLE", "retryable": true})
+				}
 			}
 			continue
 		}
@@ -83,6 +110,9 @@ func (s *Server) Handle(c *gin.Context) {
 		}
 		switch message.Type {
 		case "session.start":
+			if message.ProtocolVersion != 1 {
+				_ = writeJSON(gin.H{"type": "error", "code": "UNSUPPORTED_PROTOCOL_VERSION"})
+			}
 		case "turn.start":
 			streamMu.Lock()
 			if stream != nil {
@@ -142,4 +172,16 @@ func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, 
 		}
 		writeMu.Unlock()
 	}
+}
+
+func parseUplinkAudioFrame(data []byte) ([]byte, bool) {
+	if len(data) < 16 || data[0] != 1 || data[1] != 1 {
+		return nil, false
+	}
+	payloadBytes := int(binary.BigEndian.Uint32(data[12:16]))
+	payload := data[16:]
+	if len(payload) != payloadBytes {
+		return nil, false
+	}
+	return payload, true
 }

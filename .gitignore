@@ -10,7 +10,8 @@ dist/
 **/dist/
 
 # Binaries
-voicemate
+/voicemate
+/backend/voicemate
 *.exe
 *.exe~
 *.dll

@@ -1,28 +1,45 @@
+const TARGET_SAMPLE_RATE = 16000;
+
 type FrameHandler = (frame: ArrayBuffer) => void;
 
 export class MicrophoneCapture {
   private context: AudioContext | null = null;
   private stream: MediaStream | null = null;
   private processor: ScriptProcessorNode | null = null;
+  private active = false;
 
   async start(onFrame: FrameHandler): Promise<void> {
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    this.active = true;
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
+        sampleRate: TARGET_SAMPLE_RATE,
         echoCancellation: true,
         noiseSuppression: true,
       },
     });
-    this.context = new AudioContext();
+    if (!this.active) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    this.stream = stream;
+    this.context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
     const source = this.context.createMediaStreamSource(this.stream);
     this.processor = this.context.createScriptProcessor(1024, 1, 1);
-    this.processor.onaudioprocess = (event) =>
-      onFrame(toPcm16(event.inputBuffer.getChannelData(0)));
+    this.processor.onaudioprocess = (event) => {
+      if (!this.active) return;
+      const samples = resampleTo16k(
+        event.inputBuffer.getChannelData(0),
+        event.inputBuffer.sampleRate,
+      );
+      onFrame(toPcm16(samples));
+    };
     source.connect(this.processor);
     this.processor.connect(this.context.destination);
   }
 
   stop(): void {
+    this.active = false;
     this.processor?.disconnect();
     this.stream?.getTracks().forEach((track) => track.stop());
     void this.context?.close();
@@ -30,6 +47,25 @@ export class MicrophoneCapture {
     this.stream = null;
     this.context = null;
   }
+}
+
+function resampleTo16k(
+  samples: Float32Array,
+  inputSampleRate: number,
+): Float32Array {
+  if (inputSampleRate === TARGET_SAMPLE_RATE) return samples;
+  const ratio = inputSampleRate / TARGET_SAMPLE_RATE;
+  const outputLength = Math.max(1, Math.round(samples.length / ratio));
+  const result = new Float32Array(outputLength);
+  for (let i = 0; i < outputLength; i++) {
+    const position = i * ratio;
+    const index = Math.floor(position);
+    const nextIndex = Math.min(index + 1, samples.length - 1);
+    const fraction = position - index;
+    result[i] =
+      samples[index] + (samples[nextIndex] - samples[index]) * fraction;
+  }
+  return result;
 }
 
 function toPcm16(samples: Float32Array): ArrayBuffer {

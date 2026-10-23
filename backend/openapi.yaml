@@ -178,12 +178,14 @@ paths:
         serverMessages:
           - $ref: '#/components/schemas/WsSessionReadyMessage'
           - $ref: '#/components/schemas/WsTurnStartedMessage'
+          - $ref: '#/components/schemas/WsTurnInterruptedMessage'
           - $ref: '#/components/schemas/WsTranscriptMessage'
           - $ref: '#/components/schemas/WsResponseDeltaMessage'
           - $ref: '#/components/schemas/WsEmotionChangedMessage'
           - $ref: '#/components/schemas/WsAudioMetaMessage'
           - $ref: '#/components/schemas/WsAudioEndMessage'
           - $ref: '#/components/schemas/WsTurnCompletedMessage'
+          - $ref: '#/components/schemas/WsPongMessage'
           - $ref: '#/components/schemas/WsErrorMessage'
         binaryFrames:
           description: |
@@ -539,6 +541,27 @@ components:
           const: turn.completed
         turnId:
           type: string
+
+    WsTurnInterruptedMessage:
+      type: object
+      required: [type, turnId]
+      properties:
+        type:
+          type: string
+          const: turn.interrupted
+        turnId:
+          type: string
+
+    WsPongMessage:
+      type: object
+      required: [type, ts]
+      properties:
+        type:
+          type: string
+          const: pong
+        ts:
+          type: integer
+          format: int64
 
     WsErrorMessage:
       type: object

@@ -5,7 +5,7 @@ import { createSession, getCharacters } from "./services/api";
 import { RealtimeClient } from "./services/realtime";
 import "./App.css";
 
-type ChatLine = { role: "user" | "assistant"; text: string };
+type ChatLine = { role: "user" | "assistant"; text: string; turnId?: string };
 
 function App() {
   const [character, setCharacter] = useState<Character | null>(null);
@@ -18,6 +18,8 @@ function App() {
   const client = useMemo(() => new RealtimeClient(), []);
   const microphone = useMemo(() => new MicrophoneCapture(), []);
   const turnId = useRef(`turn_${crypto.randomUUID()}`);
+  const pressing = useRef(false);
+  const turnActive = useRef(false);
 
   useEffect(() => {
     async function loadCharacters() {
@@ -44,21 +46,31 @@ function App() {
           setConnection("ready");
           setNotice("连接已建立，按住按钮开始说话");
         }
-        if (event.type === "turn.started") {
+        if (event.type === "turn.started" && pressing.current) {
           setConnection("listening");
           setNotice("正在聆听…");
         }
         if (event.type === "transcript.final" && event.text)
           setLines((current) => [
             ...current,
-            { role: "user", text: event.text! },
+            { role: "user", text: event.text!, turnId: event.turnId },
           ]);
         if (event.type === "response.delta" && event.text) {
           setConnection("speaking");
-          setLines((current) => [
-            ...current.filter((line) => line.role !== "assistant"),
-            { role: "assistant", text: event.text! },
-          ]);
+          setLines((current) => {
+            const targetTurnId = event.turnId ?? turnId.current;
+            const last = current.at(-1);
+            if (last?.role === "assistant" && last.turnId === targetTurnId) {
+              return [
+                ...current.slice(0, -1),
+                { ...last, text: `${last.text}${event.text}` },
+              ];
+            }
+            return [
+              ...current,
+              { role: "assistant", text: event.text!, turnId: targetTurnId },
+            ];
+          });
         }
         if (event.type === "emotion.changed" && event.emotion)
           setEmotion(event.emotion);
@@ -66,12 +78,22 @@ function App() {
           setConnection("ready");
           setNotice("轮次完成，继续聊聊吧");
         }
+        if (event.type === "connection.closed") {
+          pressing.current = false;
+          turnActive.current = false;
+          microphone.stop();
+          setConnection("error");
+          setNotice("实时连接已断开，请重试");
+        }
         if (event.type === "error") {
+          pressing.current = false;
+          turnActive.current = false;
+          microphone.stop();
           setConnection("error");
           setNotice("实时服务返回错误，请重试");
         }
       }),
-    [client],
+    [client, microphone],
   );
 
   async function begin() {
@@ -89,19 +111,40 @@ function App() {
         return;
       }
     }
+    pressing.current = true;
+    turnActive.current = true;
     turnId.current = `turn_${crypto.randomUUID()}`;
+    setConnection("listening");
+    setNotice("正在聆听…");
     client.startTurn(turnId.current);
     try {
-      await microphone.start((frame) => client.sendAudio(frame));
+      await microphone.start((frame) => {
+        if (pressing.current) client.sendAudio(frame);
+      });
+      if (!pressing.current) {
+        microphone.stop();
+      }
     } catch {
-      setNotice("无法访问麦克风，仍可用演示回路继续测试");
+      if (pressing.current) {
+        setNotice("无法访问麦克风，仍可用演示回路继续测试");
+      }
     }
   }
 
   function end() {
+    if (
+      !pressing.current &&
+      !turnActive.current &&
+      connection !== "listening"
+    ) {
+      return;
+    }
+    pressing.current = false;
+    turnActive.current = false;
+    microphone.stop();
+    client.stopTurn();
     if (connection === "listening") {
-      microphone.stop();
-      client.stopTurn();
+      setConnection("ready");
     }
   }
 
