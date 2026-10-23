@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoiceMate · 原神 AI 语音伴侣 (芙宁娜)</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
+</head>
+<body>
+  <!-- 背景水纹动态流光 -->
+  <div class="water-background">
+    <div class="ripple ripple-1"></div>
+    <div class="ripple ripple-2"></div>
+    <div class="ripple ripple-3"></div>
+  </div>
+
+  <div class="main-container">
+    <!-- 顶部状态指示栏 -->
+    <header class="top-nav">
+      <div class="brand">
+        <span class="icon">🎭</span>
+        <span class="title">VoiceMate</span>
+        <span class="badge">Fontaine Edition</span>
+      </div>
+      <div class="agent-status" id="agent-status">
+        <span class="status-dot"></span>
+        <span class="status-text">灵矽AI 在线 · 芙宁娜</span>
+      </div>
+    </header>
+
+    <!-- 看板娘核心交互视窗 -->
+    <main class="companion-stage">
+      <div class="glass-card" id="pet-card">
+        
+        <!-- 角色标签与称号 -->
+        <div class="character-header">
+          <div class="char-name">芙宁娜 · 德 · 枫丹</div>
+          <div class="char-title">众水、众方、众民与众律法的女王</div>
+        </div>
+
+        <!-- 角色动态气泡 -->
+        <div class="dialogue-bubble" id="dialogue-bubble">
+          <div class="bubble-header">
+            <span class="char-tag">芙宁娜</span>
+            <span class="emotion-tag" id="emotion-tag">✨ 自信名伶</span>
+          </div>
+          <div class="bubble-content" id="bubble-text">
+            「欧庇克莱大剧院的帷幕永不落空，而你，就是本名伶最忠实的特约观众~」
+          </div>
+        </div>
+
+        <!-- 视频容器与点击交互热区 (Hitboxes) -->
+        <div class="video-wrapper" id="video-wrapper">
+          <video 
+            id="furina-video" 
+            class="furina-video" 
+            autoplay 
+            loop 
+            muted 
+            playsinline 
+            src="/static/assets/videos/furina_idle.mp4">
+          </video>
+
+          <!-- 摸头热区 (头部/帽子) -->
+          <div class="hitbox hitbox-head" id="hitbox-head" title="轻触摸摸礼帽">
+            <span class="hitbox-hint">🎩 摸摸礼帽</span>
+          </div>
+
+          <!-- 戳戳热区 (身体/身躯) -->
+          <div class="hitbox hitbox-body" id="hitbox-body" title="轻戳身躯互动">
+            <span class="hitbox-hint">👉 戳戳互动</span>
+          </div>
+
+          <!-- 点击水波纹特效层 -->
+          <div class="click-effects" id="click-effects"></div>
+        </div>
+
+        <!-- 快捷操作栏 -->
+        <div class="control-bar">
+          <button class="btn btn-mic" id="btn-mic" title="按住说话，松开发送">
+            <span class="mic-icon">🎙️</span>
+            <span class="mic-text">按住说话</span>
+            <span class="mic-wave"></span>
+          </button>
+          <button class="btn btn-primary" id="btn-touch-head">
+            <span>🎩</span> 摸摸头
+          </button>
+          <button class="btn btn-secondary" id="btn-poke">
+            <span>🍰</span> 送蛋糕
+          </button>
+          <button class="btn btn-icon" id="btn-pip" title="开启悬浮画中画">
+            <span>📺</span>
+          </button>
+          <button class="btn btn-icon" id="btn-mute" title="声音开关">
+            <span id="mute-icon">🔊</span>
+          </button>
+        </div>
+
+        <!-- 文本对话输入框 -->
+        <div class="input-group">
+          <input 
+            type="text" 
+            id="chat-input" 
+            class="chat-input" 
+            placeholder="对芙宁娜说点什么... (Enter 发送)" 
+            autocomplete="off">
+          <button class="btn-send" id="btn-send">发送</button>
+        </div>
+
+        <!-- 底部角色切换抽屉 (预留) -->
+        <footer class="character-tabs">
+          <div class="tab-item active" data-char="furina">
+            <span class="tab-icon">🌊</span>
+            <span class="tab-label">芙宁娜</span>
+          </div>
+          <div class="tab-item" data-char="yoimiya" title="点击切换 (待接入)">
+            <span class="tab-icon">🎆</span>
+            <span class="tab-label">宵宫</span>
+          </div>
+          <div class="tab-item" data-char="clorinde" title="点击切换 (待接入)">
+            <span class="tab-icon">⚡</span>
+            <span class="tab-label">克洛琳德</span>
+          </div>
+        </footer>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
