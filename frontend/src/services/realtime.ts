@@ -13,6 +13,8 @@ export class RealtimeClient {
   }
 
   connect(wsUrl: string, token: string): Promise<void> {
+    // 连接前关闭旧 socket，确保重试不会留下并行连接。
+    this.close();
     const url = new URL(wsUrl, window.location.origin);
     if (url.protocol === "http:") url.protocol = "ws:";
     if (url.protocol === "https:") url.protocol = "wss:";
@@ -38,7 +40,7 @@ export class RealtimeClient {
         try {
           this.emit(JSON.parse(message.data) as ServerEvent);
         } catch {
-          this.emit({ type: "error" });
+          this.emit({ type: "error", code: "INVALID_SERVER_MESSAGE" });
         }
       };
       socket.onclose = () => {
