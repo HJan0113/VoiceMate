@@ -104,4 +104,48 @@ describe("FurinaCompanion", () => {
       expect(screen.getByTestId("furina-sad-badge")).not.toBeNull();
     },
   );
+
+  it("switches to angry video and displays badge when emotion is angry", () => {
+    render(<FurinaCompanion state="speaking" emotion="angry" />);
+
+    const idleVideo = screen.getByTestId("furina-video-idle");
+    const happyVideo = screen.getByTestId("furina-video-happy");
+    const sadVideo = screen.getByTestId("furina-video-sad");
+    const angryVideo = screen.getByTestId("furina-video-angry");
+
+    expect(angryVideo.className).toContain("furina-video-active");
+    expect(idleVideo.className).toContain("furina-video-hidden");
+    expect(happyVideo.className).toContain("furina-video-hidden");
+    expect(sadVideo.className).toContain("furina-video-hidden");
+    expect(screen.getByTestId("furina-angry-badge")).not.toBeNull();
+    expect(screen.getByTestId("furina-angry-badge").textContent).toContain(
+      "愤怒",
+    );
+  });
+
+  it.each([
+    "pout",
+    "annoyed",
+    "furious",
+    "rage",
+    "mad",
+    "displeased",
+    "愤怒",
+    "生气",
+    "发怒",
+    "气恼",
+  ])("switches to angry video when emotion is '%s'", (simulatedEmotion) => {
+    render(<FurinaCompanion state="ready" emotion={simulatedEmotion} />);
+
+    const idleVideo = screen.getByTestId("furina-video-idle");
+    const happyVideo = screen.getByTestId("furina-video-happy");
+    const sadVideo = screen.getByTestId("furina-video-sad");
+    const angryVideo = screen.getByTestId("furina-video-angry");
+
+    expect(angryVideo.className).toContain("furina-video-active");
+    expect(idleVideo.className).toContain("furina-video-hidden");
+    expect(happyVideo.className).toContain("furina-video-hidden");
+    expect(sadVideo.className).toContain("furina-video-hidden");
+    expect(screen.getByTestId("furina-angry-badge")).not.toBeNull();
+  });
 });

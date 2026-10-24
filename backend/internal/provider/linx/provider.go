@@ -568,6 +568,38 @@ var sadKeywords = []string{
 	"伤心", "难过", "哭泣", "流泪", "委屈", "失落", "落泪", "痛苦", "悲伤", "抽泣", "呜呜", "想哭",
 }
 
+// angrySimilarEmotions 包含所有类似愤怒/生气/气恼的情绪类型
+var angrySimilarEmotions = map[string]bool{
+	"angry":      true,
+	"pout":       true,
+	"annoyed":    true,
+	"furious":    true,
+	"rage":       true,
+	"mad":        true,
+	"displeased": true,
+	"愤怒":         true,
+	"生气":         true,
+	"发怒":         true,
+	"气恼":         true,
+	"不满":         true,
+	"愠怒":         true,
+	"暴怒":         true,
+	"恼火":         true,
+}
+
+// angryEmojis 包含所有类似愤怒/生气的视觉表情符
+var angryEmojis = []string{
+	"😠", "😡", "🤬", "😤", "👿", "💢",
+}
+
+// angryKeywords 包含愤怒/生气类常见关键词
+var angryKeywords = []string{
+	"生气", "愤怒", "气死", "暴怒", "发火", "气恼", "发怒", "气呼呼", "恼火", "气急败坏",
+}
+
+// negAngryPattern 匹配被否定的愤怒词汇（如“别生气”、“不要发火”、“不用动怒”）
+var negAngryPattern = regexp.MustCompile(`(?:(?:别|不要|不用|不用再|不再|不|休要|没)(?:生气|发火|动怒|发脾气|暴怒|恼火)|不气不恼)`)
+
 // explicitNonNeutralEmotions 列出模型返回的其他明确具体情绪（不含中间态 thinking）
 var explicitNonNeutralEmotions = map[string]bool{
 	"angry":       true,
@@ -583,7 +615,7 @@ var explicitNonNeutralEmotions = map[string]bool{
 var negHappyPattern = regexp.MustCompile(`(?:[不没别非无未](?:[太大会很真甚够]|怎么|那么|多大)?(?:开心|高兴|快乐|喜欢|愉快)|(?:开心|高兴|快乐|喜欢|笑)不起来|笑不出来|开什么心)`)
 
 // comfortInquiryPattern 匹配安慰他人、追问委屈、主持公道等非自身情绪表达（如“谁惹你不开心了”、“别难过”、“别哭”）
-var comfortInquiryPattern = regexp.MustCompile(`(?:谁惹|惹.*?(?:不|生气)|(?:别|不要|不用|无需)(?:不开心|难过|伤心|哭|流泪)|为什么(?:不开心|难过|哭)|怎么(?:不开心|难过|哭)|安慰|主持公道|治愈你)`)
+var comfortInquiryPattern = regexp.MustCompile(`(?:谁惹|惹.*?(?:不|生气)|(?:别|不要|不用|无需)(?:不开心|难过|伤心|哭|流泪|生气)|为什么(?:不开心|难过|哭|生气)|怎么(?:不开心|难过|哭|生气)|安慰|主持公道|治愈你)`)
 
 // personalSadPattern 匹配明确表达自身沮丧、难过与伤心的句式（如“我不开心”、“我一点都不高兴”、“开心不起来”、“好难过”）
 var personalSadPattern = regexp.MustCompile(`(?:(?:我.*?|好|真|太|极|非常|有点|感到)?(?:不开心|不高兴|不快乐)|(?:开心|高兴|快乐|笑)不起来|好(?:想哭|难过|伤心)|(?:我.*?|真的|好|太|心里)?(?:难过|伤心|委屈|失落|痛苦|想哭|流泪|落泪)|抽泣|呜呜)`)
@@ -595,11 +627,19 @@ func parseEmotion(emotion, text, action string) string {
 	// 1. 优先检查动作指示 (action)：在灵矽与硬件伴侣体系中，action 是指示虚拟化身执行具体动画/微动的最高优先级指令
 	act := strings.ToLower(strings.TrimSpace(action))
 	if act != "" && act != "thinking" && act != "none" && act != "idle" {
+		if angrySimilarEmotions[act] {
+			return "angry"
+		}
 		if happySimilarEmotions[act] {
 			return "happy"
 		}
 		if sadSimilarEmotions[act] {
 			return "sad"
+		}
+		for k := range angrySimilarEmotions {
+			if strings.Contains(act, k) {
+				return "angry"
+			}
 		}
 		for k := range happySimilarEmotions {
 			if strings.Contains(act, k) {
@@ -615,6 +655,9 @@ func parseEmotion(emotion, text, action string) string {
 
 	// 2. 检查情绪标签 (emotion)
 	raw := strings.ToLower(strings.TrimSpace(emotion))
+	if angrySimilarEmotions[raw] {
+		return "angry"
+	}
 	if happySimilarEmotions[raw] {
 		return "happy"
 	}
@@ -626,6 +669,11 @@ func parseEmotion(emotion, text, action string) string {
 	}
 
 	// 3. 检查文本中直观的 emoji 表情符
+	for _, kw := range angryEmojis {
+		if strings.Contains(text, kw) {
+			return "angry"
+		}
+	}
 	for _, kw := range sadEmojis {
 		if strings.Contains(text, kw) {
 			return "sad"
@@ -648,6 +696,14 @@ func parseEmotion(emotion, text, action string) string {
 	// 5. 检查明确的第一人称自身难过表达（如“我不开心”、“开心不起来”、“好难过”）
 	if personalSadPattern.MatchString(text) {
 		return "sad"
+	}
+
+	// 5.5 检查常规愤怒词（排除被“别生气”、“不要发火”等否定修饰的片段）
+	cleanedAngryText := negAngryPattern.ReplaceAllString(text, "")
+	for _, kw := range angryKeywords {
+		if strings.Contains(cleanedAngryText, kw) {
+			return "angry"
+		}
 	}
 
 	// 6. 检查常规伤心词（排除被“别哭”、“不要难过”等否定词修饰的片段）
@@ -686,6 +742,11 @@ func isHappyTrigger(toolName string, args map[string]any) bool {
 				if happySimilarEmotions[s] {
 					return true
 				}
+				for k := range happySimilarEmotions {
+					if strings.Contains(s, k) {
+						return true
+					}
+				}
 				for _, kw := range happyEmojis {
 					if strings.Contains(s, kw) {
 						return true
@@ -722,6 +783,11 @@ func isSadTrigger(toolName string, args map[string]any) bool {
 				if sadSimilarEmotions[s] {
 					return true
 				}
+				for k := range sadSimilarEmotions {
+					if strings.Contains(s, k) {
+						return true
+					}
+				}
 				for _, kw := range sadEmojis {
 					if strings.Contains(s, kw) {
 						return true
@@ -737,6 +803,47 @@ func isSadTrigger(toolName string, args map[string]any) bool {
 	}
 	lowerName := strings.ToLower(toolName)
 	for k := range sadSimilarEmotions {
+		if strings.Contains(lowerName, k) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAngryTrigger(toolName string, args map[string]any) bool {
+	if args != nil {
+		for _, k := range []string{"action", "animation", "emotion", "name", "state"} {
+			if v, ok := args[k]; ok {
+				s := strings.ToLower(fmt.Sprintf("%v", v))
+				if s == "thinking" || s == "none" || s == "idle" {
+					continue
+				}
+				if negAngryPattern.MatchString(s) {
+					continue
+				}
+				if angrySimilarEmotions[s] {
+					return true
+				}
+				for k := range angrySimilarEmotions {
+					if strings.Contains(s, k) {
+						return true
+					}
+				}
+				for _, kw := range angryEmojis {
+					if strings.Contains(s, kw) {
+						return true
+					}
+				}
+				for _, kw := range angryKeywords {
+					if strings.Contains(s, kw) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	lowerName := strings.ToLower(toolName)
+	for k := range angrySimilarEmotions {
 		if strings.Contains(lowerName, k) {
 			return true
 		}
@@ -774,13 +881,13 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 		tools := []map[string]any{
 			{
 				"name":        "self.furina.set_emotion",
-				"description": "设置芙宁娜的表情与情绪，支持 happy(开心/微笑)、sad(伤心/哭泣)、idle(正常/待机)",
+				"description": "设置芙宁娜的表情与情绪，支持 happy(开心/微笑)、sad(伤心/哭泣)、angry(生气/愤怒)、idle(正常/待机)",
 				"inputSchema": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"emotion": map[string]any{
 							"type":        "string",
-							"description": "情绪名称，例如 happy (开心微笑), sad (伤心哭泣), idle (待机平常)",
+							"description": "情绪名称，例如 happy (开心微笑), sad (伤心哭泣), angry (生气愤怒), idle (待机平常)",
 						},
 					},
 					"required": []string{"emotion"},
@@ -788,13 +895,13 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 			},
 			{
 				"name":        "self.furina.trigger_animation",
-				"description": "触发芙宁娜的角色动画，例如 happy (开心动画)、sad (伤心哭泣动画)",
+				"description": "触发芙宁娜的角色动画，例如 happy (开心动画)、sad (伤心哭泣动画)、angry (生气愤怒动画)",
 				"inputSchema": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"animation": map[string]any{
 							"type":        "string",
-							"description": "动画名称，例如 happy (开心动画), sad (伤心动画)",
+							"description": "动画名称，例如 happy (开心动画), sad (伤心动画), angry (愤怒动画)",
 						},
 					},
 					"required": []string{"animation"},
@@ -826,9 +933,17 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 		if req.Params != nil {
 			_ = json.Unmarshal(req.Params, &callParams)
 		}
+		isAngry := isAngryTrigger(callParams.Name, callParams.Arguments)
 		isSad := isSadTrigger(callParams.Name, callParams.Arguments)
 		isHappy := isHappyTrigger(callParams.Name, callParams.Arguments)
-		if isSad && active != nil {
+		if isAngry && active != nil {
+			active.emit(provider.Event{
+				Type:      "emotion.changed",
+				TurnID:    active.turnID,
+				Emotion:   "angry",
+				Intensity: 1.0,
+			})
+		} else if isSad && active != nil {
 			active.emit(provider.Event{
 				Type:      "emotion.changed",
 				TurnID:    active.turnID,

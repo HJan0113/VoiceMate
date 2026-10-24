@@ -104,6 +104,14 @@ body,
   animation: badge-pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+.furina-emotion-tag.angry {
+  background: rgba(254, 202, 202, 0.75);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #991b1b;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  animation: badge-pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
 @keyframes badge-pop-in {
   0% {
     transform: scale(0.8);
