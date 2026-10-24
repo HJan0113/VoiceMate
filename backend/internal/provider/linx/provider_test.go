@@ -188,6 +188,22 @@ func TestParseEmotion(t *testing.T) {
 		{emotion: "", text: "", action: "crying_tears", expected: "sad"},
 		{emotion: "", text: "", action: "sad_face", expected: "sad"},
 
+		// 核心测试用例：含“不开心”的安慰/主持公道句式，严禁误判为开心 (happy)
+		{emotion: "", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "idle"},
+		{emotion: "neutral", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "idle"},
+		{emotion: "proud", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "proud"},
+
+		// 表达自身沮丧、难过与伤心
+		{emotion: "", text: "我不开心", action: "", expected: "sad"},
+		{emotion: "", text: "今天好不开心啊，呜呜", action: "", expected: "sad"},
+		{emotion: "", text: "开心不起来", action: "", expected: "sad"},
+		{emotion: "", text: "我一点都不高兴", action: "", expected: "sad"},
+
+		// 安慰/否定悲伤词，不应判定为伤心 (sad)
+		{emotion: "", text: "别难过，有我在呢", action: "", expected: "idle"},
+		{emotion: "", text: "别哭啦，摸摸头", action: "", expected: "idle"},
+		{emotion: "", text: "不要伤心，一切都会好起来的", action: "", expected: "idle"},
+
 		// 其余类型表情，保持各自原状态
 		{emotion: "neutral", text: "", action: "", expected: "neutral"},
 		{emotion: "thinking", text: "", action: "", expected: "thinking"},
