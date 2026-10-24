@@ -22,10 +22,12 @@ type Service struct {
 func NewService() *Service {
 	return &Service{
 		characters: []domain.Character{{
-			ID: "furina", Slug: "furina", DisplayName: "芙宁娜", Status: "active", VoiceProfile: "qiniu-placeholder",
+			ID: "furina", Slug: "furina", DisplayName: "芙宁娜", Status: "active", VoiceProfile: "furina-qiniu-linx",
 			EmotionProfiles: map[string]domain.EmotionProfile{
-				"proud":    {Video: "/assets/characters/furina/proud.mp4", PlaybackRate: 1.08},
-				"thinking": {Video: "/assets/characters/furina/thinking.mp4", PlaybackRate: 1},
+				"idle":     {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.0},
+				"speaking": {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.08},
+				"proud":    {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.08},
+				"thinking": {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.0},
 			},
 		}}, sessions: map[string]domain.Session{}, conversations: map[string]domain.Conversation{},
 	}

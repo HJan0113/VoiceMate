@@ -10,45 +10,48 @@ export class MicrophoneCapture {
   private active = false;
 
   async start(onFrame: FrameHandler): Promise<void> {
-    // 新一轮采集开始前先清理旧上下文，处理快速重试造成的竞态。
     this.stop();
     this.active = true;
-    let stream: MediaStream;
+
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      // 避免在 getUserMedia 约束中硬编码 sampleRate，这在 Windows 很多硬件声卡上会直接报错
+      this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: TARGET_SAMPLE_RATE,
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true,
         },
       });
-    } catch (error) {
-      this.active = false;
-      throw error;
-    }
-    if (!this.active) {
-      stream.getTracks().forEach((track) => track.stop());
-      return;
-    }
-    this.stream = stream;
-    try {
-      this.context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
-      await this.context.resume();
+
+      const AudioCtxClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+
+      // 使用系统硬件默认采样率初始化，随后在 onaudioprocess 中进行高质量线性重采样
+      this.context = new AudioCtxClass();
+      if (this.context.state === "suspended") {
+        await this.context.resume();
+      }
+
       this.source = this.context.createMediaStreamSource(this.stream);
-      this.processor = this.context.createScriptProcessor(1024, 1, 1);
+      // 采用 2048 采样点缓冲区，避免 Windows 底层音频缓冲区欠载
+      this.processor = this.context.createScriptProcessor(2048, 1, 1);
+      const inputSampleRate = this.context.sampleRate;
+
       this.processor.onaudioprocess = (event) => {
         if (!this.active) return;
-        const samples = resampleTo16k(
-          event.inputBuffer.getChannelData(0),
-          event.inputBuffer.sampleRate,
-        );
-        onFrame(toPcm16(samples));
+        const inputData = event.inputBuffer.getChannelData(0);
+        const pcm16k = resampleTo16kPcm(inputData, inputSampleRate);
+        if (pcm16k.byteLength > 0) {
+          onFrame(pcm16k);
+        }
       };
+
       this.source.connect(this.processor);
       this.processor.connect(this.context.destination);
     } catch (error) {
-      // 初始化音频上下文失败时回收已经取得的麦克风资源。
       this.stop();
       throw error;
     }
@@ -58,40 +61,40 @@ export class MicrophoneCapture {
     this.active = false;
     this.source?.disconnect();
     this.processor?.disconnect();
-    this.stream?.getTracks().forEach((track) => track.stop());
-    void this.context?.close();
+    if (this.stream) {
+      this.stream.getTracks().forEach((track) => track.stop());
+      this.stream = null;
+    }
+    if (this.context) {
+      void this.context.close();
+      this.context = null;
+    }
     this.processor = null;
     this.source = null;
-    this.stream = null;
-    this.context = null;
   }
 }
 
-function resampleTo16k(
-  samples: Float32Array,
-  inputSampleRate: number,
-): Float32Array {
-  if (inputSampleRate === TARGET_SAMPLE_RATE) return samples;
-  const ratio = inputSampleRate / TARGET_SAMPLE_RATE;
-  const outputLength = Math.max(1, Math.round(samples.length / ratio));
-  const result = new Float32Array(outputLength);
-  for (let i = 0; i < outputLength; i++) {
-    const position = i * ratio;
-    const index = Math.floor(position);
-    const nextIndex = Math.min(index + 1, samples.length - 1);
-    const fraction = position - index;
-    result[i] =
-      samples[index] + (samples[nextIndex] - samples[index]) * fraction;
+// 线性重采样并量化为 16-bit PCM (Little-Endian)
+function resampleTo16kPcm(
+  inputData: Float32Array,
+  inputRate: number,
+): ArrayBuffer {
+  if (inputRate === TARGET_SAMPLE_RATE) {
+    const int16 = new Int16Array(inputData.length);
+    for (let i = 0; i < inputData.length; i++) {
+      const s = Math.max(-1, Math.min(1, inputData[i]));
+      int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return int16.buffer;
   }
-  return result;
-}
 
-function toPcm16(samples: Float32Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(samples.length * 2);
-  const view = new DataView(buffer);
-  samples.forEach((sample, index) => {
-    const value = Math.max(-1, Math.min(1, sample));
-    view.setInt16(index * 2, value < 0 ? value * 0x8000 : value * 0x7fff, true);
-  });
-  return buffer;
+  const ratio = inputRate / TARGET_SAMPLE_RATE;
+  const newLen = Math.round(inputData.length / ratio);
+  const int16 = new Int16Array(newLen);
+  for (let i = 0; i < newLen; i++) {
+    const idx = Math.floor(i * ratio);
+    const s = Math.max(-1, Math.min(1, inputData[idx]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return int16.buffer;
 }

@@ -46,6 +46,7 @@ type control struct {
 	TurnID          string `json:"turnId,omitempty"`
 	ClientTurnID    string `json:"clientTurnId,omitempty"`
 	Reason          string `json:"reason,omitempty"`
+	Text            string `json:"text,omitempty"`
 }
 
 const maxMessageBytes = 64 * 1024
@@ -170,6 +171,13 @@ func (s *Server) Handle(c *gin.Context) {
 			if active != nil {
 				closeStream(true)
 				_ = writeJSON(gin.H{"type": "turn.interrupted", "turnId": message.TurnID})
+			}
+		case "chat.text":
+			streamMu.Lock()
+			active := stream
+			streamMu.Unlock()
+			if active != nil && message.Text != "" {
+				_ = active.SendText(message.Text)
 			}
 		case "ping":
 			_ = writeJSON(gin.H{"type": "pong", "ts": time.Now().UnixMilli()})

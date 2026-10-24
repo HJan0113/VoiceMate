@@ -58,5 +58,6 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/kurodakayn/voicemate
+        - github.com/HJan0113/VoiceMate
   exclusions:
     generated: strict

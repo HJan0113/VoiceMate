@@ -2,9 +2,10 @@ export type ConnectionState =
   | "idle"
   | "connecting"
   | "ready"
+  | "calling"
+  | "speaking"
   | "listening"
   | "processing"
-  | "speaking"
   | "error";
 
 export type ChatLine = {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ChatLine,
   ConnectionState,
@@ -7,30 +7,76 @@ import type {
 } from "./domain/types";
 import { PlatformLayout } from "./components/platform/PlatformLayout";
 import { MicrophoneCapture } from "./features/voice/capture";
+import { PcmStreamPlayer } from "./features/voice/player";
 import { createSession } from "./services/api";
 import { RealtimeClient } from "./services/realtime";
 import "./App.css";
 
 function App() {
-  const [state, setState] = useState<ConnectionState>("idle");
-  const [notice, setNotice] = useState("准备建立实时会话");
+  const [state, setState] = useState<ConnectionState>("connecting");
+  const [notice, setNotice] = useState("正在连接灵矽服务...");
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [lines, setLines] = useState<ChatLine[]>([]);
   const [muted, setMuted] = useState(false);
+  const [emotion, setEmotion] = useState<string>("neutral");
+  const [assistantText, setAssistantText] = useState<string>("");
+
   const client = useMemo(() => new RealtimeClient(), []);
   const microphone = useMemo(() => new MicrophoneCapture(), []);
+  const player = useMemo(() => new PcmStreamPlayer(16000), []);
+
   const turnId = useRef(`turn_${crypto.randomUUID()}`);
-  const pressing = useRef(false);
-  const turnActive = useRef(false);
+  const isRecordingRef = useRef(false);
   const mutedRef = useRef(false);
+  const processingTimerRef = useRef<number | null>(null);
+
+  const clearProcessingTimer = useCallback(() => {
+    if (processingTimerRef.current !== null) {
+      window.clearTimeout(processingTimerRef.current);
+      processingTimerRef.current = null;
+    }
+  }, []);
+
+  const startProcessingWatchdog = useCallback(() => {
+    clearProcessingTimer();
+    processingTimerRef.current = window.setTimeout(() => {
+      if (!isRecordingRef.current) {
+        client.interrupt();
+        setState("ready");
+        setNotice("未识别到有效语音或响应超时，按住按钮可重新说话");
+      }
+    }, 7000);
+  }, [clearProcessingTimer, client]);
+
+  // 页面加载时自动连接服务
+  useEffect(() => {
+    let canceled = false;
+    const init = async () => {
+      try {
+        const nextSession = await createSession();
+        if (canceled) return;
+        setSession(nextSession);
+        await client.connect(nextSession.wsUrl, nextSession.ephemeralToken);
+      } catch {
+        if (canceled) return;
+        setState("error");
+        setError("连接失败，请确认后端已启动（端口 8080）");
+        setNotice("服务未连接");
+      }
+    };
+    void init();
+    return () => {
+      canceled = true;
+    };
+  }, [client]);
 
   useEffect(() => {
     const releaseResources = () => {
-      // 页面切换或卸载时主动释放浏览器资源，避免麦克风继续占用。
-      pressing.current = false;
-      turnActive.current = false;
+      clearProcessingTimer();
+      isRecordingRef.current = false;
       microphone.stop();
+      player.close();
       client.close();
     };
     window.addEventListener("pagehide", releaseResources);
@@ -38,151 +84,216 @@ function App() {
       window.removeEventListener("pagehide", releaseResources);
       releaseResources();
     };
-  }, [client, microphone]);
+  }, [clearProcessingTimer, client, microphone, player]);
 
-  useEffect(
-    () =>
-      client.on((event: ServerEvent) => {
-        if (event.type === "session.ready") {
-          setState("ready");
-          setError(null);
-          setNotice("连接已建立，按住按钮开始输入");
-        }
-        if (event.type === "turn.started" && pressing.current) {
-          setState("listening");
-          setNotice("正在接收输入…");
-        }
-        if (event.type === "transcript.final" && event.text) {
-          setLines((current) => [
+  useEffect(() => {
+    // 监听下行二进制 PCM 音频流
+    const unlistenAudio = client.onAudio((chunk) => {
+      if (!mutedRef.current) {
+        player.feed(chunk);
+      }
+    });
+
+    const unlistenEvents = client.on((event: ServerEvent) => {
+      if (event.type === "session.ready") {
+        clearProcessingTimer();
+        setState("ready");
+        setError(null);
+        setNotice("服务已就绪 · 按住下方按钮开始说话");
+      }
+      if (event.type === "turn.started" && isRecordingRef.current) {
+        clearProcessingTimer();
+        setState("listening");
+        setNotice("正在倾听你的声音... 松开发送");
+      }
+      if (event.type === "emotion.changed" && event.emotion) {
+        setEmotion(event.emotion);
+      }
+      if (event.type === "transcript.final" && event.text) {
+        setLines((current) => [
+          ...current,
+          {
+            id: `user_${Date.now()}`,
+            role: "user",
+            text: event.text!,
+          },
+        ]);
+        setState("processing");
+        setNotice("正在思考回复...");
+        startProcessingWatchdog();
+      }
+      if (event.type === "response.delta" && event.text) {
+        clearProcessingTimer();
+        setState("speaking");
+        setAssistantText((prev) => prev + event.text!);
+        setLines((current) => {
+          const last = current.at(-1);
+          if (last?.role === "assistant") {
+            return [
+              ...current.slice(0, -1),
+              { ...last, text: `${last.text}${event.text}` },
+            ];
+          }
+          return [
             ...current,
             {
-              id: `${event.turnId ?? turnId.current}-user`,
-              role: "user",
+              id: `assistant_${Date.now()}`,
+              role: "assistant",
               text: event.text!,
-              turnId: event.turnId,
             },
-          ]);
-          setState("processing");
-        }
-        if (event.type === "response.delta" && event.text) {
-          setState("speaking");
-          setLines((current) => {
-            const targetTurnId = event.turnId ?? turnId.current;
-            const last = current.at(-1);
-            if (last?.role === "assistant" && last.turnId === targetTurnId) {
-              return [
-                ...current.slice(0, -1),
-                { ...last, text: `${last.text}${event.text}` },
-              ];
-            }
-            return [
-              ...current,
-              {
-                id: `${targetTurnId}-assistant`,
-                role: "assistant",
-                text: event.text!,
-                turnId: targetTurnId,
-              },
-            ];
-          });
-        }
-        if (event.type === "turn.completed" || event.type === "audio.end") {
-          turnActive.current = false;
+          ];
+        });
+      }
+      if (event.type === "turn.completed" || event.type === "audio.end") {
+        clearProcessingTimer();
+        if (!isRecordingRef.current) {
           setState("ready");
-          setNotice("本轮完成，可以继续输入");
+          setNotice("按住下方按钮开始说话");
         }
-        if (event.type === "connection.closed") {
-          pressing.current = false;
-          turnActive.current = false;
-          microphone.stop();
-          setState("error");
-          setError("实时连接已断开，请重试");
-          setNotice("连接异常");
-        }
-        if (event.type === "error") {
-          pressing.current = false;
-          turnActive.current = false;
-          microphone.stop();
-          setState("error");
-          setError(
-            event.code
-              ? `实时服务错误（${event.code}），请重试`
-              : "实时服务返回错误，请重试",
-          );
-          setNotice("连接异常");
-        }
-      }),
-    [client, microphone],
-  );
+      }
+      if (event.type === "connection.closed") {
+        clearProcessingTimer();
+        isRecordingRef.current = false;
+        microphone.stop();
+        player.stop();
+        setState("error");
+        setError("实时连接已断开，请重试连接");
+        setNotice("连接断开");
+      }
+      if (event.type === "error") {
+        clearProcessingTimer();
+        isRecordingRef.current = false;
+        microphone.stop();
+        player.stop();
+        setState("error");
+        setError(
+          event.code
+            ? `实时服务错误（${event.code}），请重试`
+            : "实时服务返回错误，请重试",
+        );
+        setNotice("连接异常");
+      }
+    });
 
+    return () => {
+      unlistenAudio();
+      unlistenEvents();
+    };
+  }, [
+    clearProcessingTimer,
+    client,
+    microphone,
+    player,
+    startProcessingWatchdog,
+  ]);
+
+  // 连接服务（用于重试或手动开始）
   async function startSession() {
-    if (state !== "idle" && state !== "error") return;
     setError(null);
     client.close();
+    player.ensureContext();
     setState("connecting");
-    setNotice("正在建立实时会话…");
+    setNotice("正在连接灵矽AI伴侣服务...");
     try {
       const nextSession = await createSession();
       setSession(nextSession);
       await client.connect(nextSession.wsUrl, nextSession.ephemeralToken);
     } catch {
       setState("error");
-      setError("连接失败，请确认服务已启动后重试");
-      setNotice("无法建立会话");
+      setError("连接失败，请确认后端已启动（端口 8080）");
+      setNotice("服务未连接");
     }
   }
 
-  async function startInput() {
-    if (state !== "ready") return;
-    pressing.current = true;
-    turnActive.current = true;
+  // 按住说话：按下开始录音采集并推流
+  async function startVoice() {
+    if (state !== "ready" && state !== "speaking" && state !== "processing")
+      return;
+    clearProcessingTimer();
+    setError(null);
+    player.ensureContext();
+    player.stop(); // 打断当前正在播放的声音
+    if (state === "processing" || state === "speaking") {
+      client.interrupt();
+    }
+    setAssistantText("");
+    isRecordingRef.current = true;
     turnId.current = `turn_${crypto.randomUUID()}`;
     setState("listening");
-    setNotice("正在接收输入…");
+    setNotice("正在倾听你的声音... 松开发送");
     client.startTurn(turnId.current);
+
     try {
       await microphone.start((frame) => {
-        if (pressing.current && !mutedRef.current) client.sendAudio(frame);
+        if (isRecordingRef.current && !mutedRef.current) {
+          client.sendAudio(frame);
+        }
       });
-      if (!pressing.current) microphone.stop();
+      if (!isRecordingRef.current) {
+        microphone.stop();
+      }
     } catch {
-      if (pressing.current) {
-        pressing.current = false;
-        turnActive.current = false;
+      if (isRecordingRef.current) {
+        clearProcessingTimer();
+        isRecordingRef.current = false;
         microphone.stop();
         client.interrupt();
         setState("ready");
-        setError("无法访问麦克风，请检查浏览器权限");
-        setNotice("麦克风不可用");
+        setError("无法访问麦克风，请在浏览器地址栏检查麦克风权限！");
+        setNotice("麦克风未授权");
       }
     }
   }
 
-  function stopInput() {
-    if (!pressing.current && !turnActive.current) return;
-    pressing.current = false;
-    turnActive.current = false;
+  // 松开手指/鼠标：停止录音采集，通知服务端生成回答
+  function stopVoice() {
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
     microphone.stop();
     client.stopTurn();
-    if (state === "listening") {
-      setState("processing");
-      setNotice("正在处理输入…");
-    }
+    setState("processing");
+    setNotice("正在思考与回复中...");
+    startProcessingWatchdog();
   }
 
+  // 结束/重置会话
   function endSession() {
-    if (state === "connecting" || state === "listening") return;
-    pressing.current = false;
-    turnActive.current = false;
+    clearProcessingTimer();
+    isRecordingRef.current = false;
     microphone.stop();
+    player.stop();
     client.interrupt();
     client.close();
     setSession(null);
     mutedRef.current = false;
     setMuted(false);
+    setAssistantText("");
     setState("idle");
     setError(null);
-    setNotice("会话已结束，可以重新开始");
+    setNotice("会话已断开，点击重新连接");
+  }
+
+  // 发送文本
+  function sendText(text: string) {
+    if (!text || (state !== "ready" && state !== "processing")) return;
+    clearProcessingTimer();
+    player.ensureContext();
+    player.stop();
+    setAssistantText("");
+
+    setLines((current) => [
+      ...current,
+      {
+        id: `user_${Date.now()}`,
+        role: "user",
+        text,
+      },
+    ]);
+
+    setState("processing");
+    setNotice("正在思考与回复中...");
+    client.sendText(text);
+    startProcessingWatchdog();
   }
 
   return (
@@ -194,15 +305,18 @@ function App() {
       lines={lines}
       disabled={state === "connecting"}
       muted={muted}
+      emotion={emotion}
+      assistantText={assistantText}
       onSessionAction={() => void startSession()}
       onEndSession={endSession}
-      onInputAction={
-        state === "listening" ? stopInput : () => void startInput()
-      }
       onToggleMute={() => {
         mutedRef.current = !mutedRef.current;
         setMuted(mutedRef.current);
+        player.setMuted(mutedRef.current);
       }}
+      onStartVoice={() => void startVoice()}
+      onStopVoice={stopVoice}
+      onSendText={sendText}
     />
   );
 }
