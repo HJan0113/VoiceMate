@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kurodakayn/voicemate/internal/application"
+	"github.com/HJan0113/VoiceMate/internal/application"
 )
 
 func TestCreateSessionRejectsInvalidJSON(t *testing.T) {

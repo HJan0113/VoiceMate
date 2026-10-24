@@ -1,4 +1,4 @@
-module github.com/kurodakayn/voicemate
+module github.com/HJan0113/VoiceMate
 
 go 1.27.3
 

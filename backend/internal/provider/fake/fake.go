@@ -6,7 +6,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/kurodakayn/voicemate/internal/provider"
+	"github.com/HJan0113/VoiceMate/internal/provider"
 )
 
 type Provider struct{}

@@ -6,11 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kurodakayn/voicemate/internal/application"
-	"github.com/kurodakayn/voicemate/internal/http/handler"
-	"github.com/kurodakayn/voicemate/internal/http/middleware"
-	"github.com/kurodakayn/voicemate/internal/provider/fake"
-	"github.com/kurodakayn/voicemate/internal/realtime"
+	"github.com/HJan0113/VoiceMate/internal/application"
+	"github.com/HJan0113/VoiceMate/internal/http/handler"
+	"github.com/HJan0113/VoiceMate/internal/http/middleware"
+	"github.com/HJan0113/VoiceMate/internal/provider/fake"
+	"github.com/HJan0113/VoiceMate/internal/realtime"
 )
 
 func main() {
