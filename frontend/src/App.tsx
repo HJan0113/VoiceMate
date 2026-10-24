@@ -17,11 +17,13 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [lines, setLines] = useState<ChatLine[]>([]);
+  const [muted, setMuted] = useState(false);
   const client = useMemo(() => new RealtimeClient(), []);
   const microphone = useMemo(() => new MicrophoneCapture(), []);
   const turnId = useRef(`turn_${crypto.randomUUID()}`);
   const pressing = useRef(false);
   const turnActive = useRef(false);
+  const mutedRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -103,24 +105,24 @@ function App() {
     [client, microphone],
   );
 
-  async function begin() {
-    if (state === "connecting") return;
+  async function startSession() {
+    if (state !== "idle" && state !== "error") return;
     setError(null);
-    if (state === "idle" || state === "error") {
-      setState("connecting");
-      setNotice("正在建立实时会话…");
-      try {
-        const nextSession = await createSession();
-        setSession(nextSession);
-        await client.connect(nextSession.wsUrl, nextSession.ephemeralToken);
-        return;
-      } catch {
-        setState("error");
-        setError("连接失败，请确认服务已启动后重试");
-        setNotice("无法建立会话");
-        return;
-      }
+    setState("connecting");
+    setNotice("正在建立实时会话…");
+    try {
+      const nextSession = await createSession();
+      setSession(nextSession);
+      await client.connect(nextSession.wsUrl, nextSession.ephemeralToken);
+    } catch {
+      setState("error");
+      setError("连接失败，请确认服务已启动后重试");
+      setNotice("无法建立会话");
     }
+  }
+
+  async function startInput() {
+    if (state !== "ready") return;
     pressing.current = true;
     turnActive.current = true;
     turnId.current = `turn_${crypto.randomUUID()}`;
@@ -129,7 +131,7 @@ function App() {
     client.startTurn(turnId.current);
     try {
       await microphone.start((frame) => {
-        if (pressing.current) client.sendAudio(frame);
+        if (pressing.current && !mutedRef.current) client.sendAudio(frame);
       });
     } catch {
       if (pressing.current) {
@@ -139,7 +141,7 @@ function App() {
     }
   }
 
-  function end() {
+  function stopInput() {
     if (!pressing.current && !turnActive.current) return;
     pressing.current = false;
     turnActive.current = false;
@@ -151,6 +153,20 @@ function App() {
     }
   }
 
+  function endSession() {
+    if (state === "connecting" || state === "listening") return;
+    pressing.current = false;
+    turnActive.current = false;
+    microphone.stop();
+    client.close();
+    setSession(null);
+    mutedRef.current = false;
+    setMuted(false);
+    setState("idle");
+    setError(null);
+    setNotice("会话已结束，可以重新开始");
+  }
+
   return (
     <PlatformLayout
       state={state}
@@ -159,9 +175,16 @@ function App() {
       sessionId={session?.sessionId}
       lines={lines}
       disabled={state === "connecting"}
-      onPointerDown={() => void begin()}
-      onPointerUp={end}
-      onPointerLeave={end}
+      muted={muted}
+      onSessionAction={() => void startSession()}
+      onEndSession={endSession}
+      onInputAction={
+        state === "listening" ? stopInput : () => void startInput()
+      }
+      onToggleMute={() => {
+        mutedRef.current = !mutedRef.current;
+        setMuted(mutedRef.current);
+      }}
     />
   );
 }
