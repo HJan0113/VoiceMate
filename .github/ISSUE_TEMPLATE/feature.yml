@@ -1,0 +1,46 @@
+name: Feature
+description: 新功能或交互改进
+title: "[Feature]: "
+labels: ["feature"]
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 涉及模块
+      options:
+        - frontend
+        - backend
+        - fullstack
+        - api
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景与问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 方案设计
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 验收标准
+      value: |
+        - [ ] 
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充说明
+    validations:
+      required: false
