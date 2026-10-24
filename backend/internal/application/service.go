@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kurodakayn/voicemate/internal/domain"
+	"github.com/HJan0113/VoiceMate/internal/domain"
 )
 
 var ErrSessionNotFound = errors.New("session not found")

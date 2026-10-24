@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
-	"github.com/kurodakayn/voicemate/internal/application"
-	"github.com/kurodakayn/voicemate/internal/provider"
+	"github.com/HJan0113/VoiceMate/internal/application"
+	"github.com/HJan0113/VoiceMate/internal/provider"
 )
 
 type Server struct {
