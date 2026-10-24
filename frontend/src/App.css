@@ -396,17 +396,6 @@ footer {
   gap: 8px;
 }
 
-.emotion-badge {
-  padding: 4px 10px;
-  border-radius: 9999px;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
 .pip-button {
   padding: 4px 10px;
   border-radius: 6px;
@@ -450,56 +439,6 @@ footer {
   pointer-events: none;
 }
 
-.hitbox {
-  position: absolute;
-  cursor: pointer;
-  z-index: 10;
-  border-radius: 14px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition:
-    background-color 0.2s,
-    outline 0.2s;
-}
-
-.hitbox-head {
-  top: 10%;
-  left: 28%;
-  width: 44%;
-  height: 30%;
-}
-
-.hitbox-body {
-  top: 40%;
-  left: 24%;
-  width: 52%;
-  height: 44%;
-}
-
-.hitbox-hint {
-  opacity: 0;
-  transform: translateY(6px);
-  background: rgba(14, 30, 56, 0.75);
-  color: #ffffff;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 12px;
-  transition: all 0.2s ease;
-  pointer-events: none;
-  font-weight: 500;
-}
-
-.hitbox:hover {
-  background: rgba(14, 165, 233, 0.08);
-  outline: 1.5px dashed rgba(14, 165, 233, 0.45);
-}
-
-.hitbox:hover .hitbox-hint {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 .furina-bubble {
   position: absolute;
   bottom: 16px;
@@ -532,30 +471,6 @@ footer {
   line-height: 1.55;
   margin: 0;
   letter-spacing: 0.01em;
-}
-
-.furina-quick-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.quick-action-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #d9d9d4;
-  background: #fdfdfc;
-  color: #374151;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.quick-action-btn:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
 }
 
 /* Realtime Phone Call Control Styles */
