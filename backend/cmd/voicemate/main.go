@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -17,7 +18,7 @@ import (
 )
 
 func loadEnvFile(path string) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // configuration path is a trusted local filename
 	if err != nil {
 		return
 	}
@@ -82,7 +83,7 @@ func main() {
 
 	router.GET("/health/live", api.Live)
 	router.GET("/health/ready", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ready", "provider": providerName})
+		c.JSON(http.StatusOK, gin.H{"status": "ready", "provider": providerName})
 	})
 	router.StaticFile("/openapi.yaml", "openapi.yaml")
 	v1 := router.Group("/api/v1")

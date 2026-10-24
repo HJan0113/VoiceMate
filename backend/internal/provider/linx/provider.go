@@ -85,7 +85,7 @@ func (p *Provider) getLinxToken() (string, string, error) {
 		return "", "", err
 	}
 
-	req, err := http.NewRequest("POST", p.cfg.OTAGateway, bytes.NewBuffer(bodyBytes))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", p.cfg.OTAGateway, bytes.NewBuffer(bodyBytes)) //nolint:gosec // gateway URL is provided via configuration
 	if err != nil {
 		return "", "", err
 	}
@@ -137,7 +137,7 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 	header.Set("Protocol-Version", "1")
 
 	dialer := websocket.DefaultDialer
-	conn, _, err := dialer.DialContext(ctx, wsURL, header)
+	conn, _, err := dialer.DialContext(ctx, wsURL, header) //nolint:gosec // websocket URL is provided by OTA gateway
 	if err != nil {
 		return fmt.Errorf("linx dial error: %w", err)
 	}
@@ -376,6 +376,12 @@ func newStream(turnID string, p *Provider) *stream {
 	}
 }
 
+func (p *Provider) getSessionID() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.sessionID
+}
+
 func (s *stream) SendAudio(payload []byte) error {
 	select {
 	case <-s.cancel:
@@ -391,7 +397,7 @@ func (s *stream) SendText(text string) error {
 		return errors.New("stream closed")
 	default:
 		msg := map[string]interface{}{
-			"session_id": s.provider.sessionID,
+			"session_id": s.provider.getSessionID(),
 			"type":       "listen",
 			"state":      "detect",
 			"text":       text,
@@ -407,18 +413,20 @@ func (s *stream) Events() <-chan provider.Event {
 func (s *stream) Stop() {
 	s.stop.Do(func() {
 		stopMsg := map[string]interface{}{
-			"session_id": s.provider.sessionID,
+			"session_id": s.provider.getSessionID(),
 			"type":       "listen",
 			"state":      "stop",
 		}
 		_ = s.provider.writeJSON(stopMsg)
 
 		// 启动安全看门狗：如果 8 秒内未收到云端任何响应（例如无有效语音），自动触发 turn.completed，避免前端卡死在思考状态
+		t := time.NewTimer(8 * time.Second)
 		go func() {
+			defer t.Stop()
 			select {
 			case <-s.cancel:
 				return
-			case <-time.After(8 * time.Second):
+			case <-t.C:
 				s.emit(provider.Event{
 					Type:   "turn.completed",
 					TurnID: s.turnID,
@@ -432,7 +440,7 @@ func (s *stream) Interrupt() {
 	s.close.Do(func() {
 		// 向灵矽 AI 下发 abort 终止指令
 		abortMsg := map[string]interface{}{
-			"session_id": s.provider.sessionID,
+			"session_id": s.provider.getSessionID(),
 			"type":       "abort",
 		}
 		_ = s.provider.writeJSON(abortMsg)
