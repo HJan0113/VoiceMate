@@ -1,10 +1,8 @@
 import type { ChatLine, ConnectionState } from "../../domain/types";
 import { ControlPanel } from "./ControlPanel";
-import { ErrorNotice } from "./ErrorNotice";
+import { DashboardDialog } from "./DashboardDialog";
 import { FurinaCompanion } from "./FurinaCompanion";
-import { SessionInfo } from "./SessionInfo";
 import { TopBar } from "./TopBar";
-import { TranscriptPanel } from "./TranscriptPanel";
 
 type PlatformLayoutProps = {
   state: ConnectionState;
@@ -42,47 +40,45 @@ export function PlatformLayout({
   onSendText,
 }: PlatformLayoutProps) {
   return (
-    <main className="shell">
-      <TopBar state={state} />
-      <section className="workspace" aria-label="实时会话工作区">
-        <FurinaCompanion
-          state={state}
-          emotion={emotion}
-          assistantText={assistantText}
-          onSendText={onSendText}
-        />
-        <section className="console" aria-label="会话控制区">
-          <div className="console-heading">
-            <div>
-              <p className="section-kicker">SESSION CONSOLE</p>
-              <h1>实时会话</h1>
-            </div>
-            <span className="console-version">灵矽AI 伴侣</span>
-          </div>
-          <SessionInfo state={state} sessionId={sessionId} />
-          <ErrorNotice message={error} />
-          <TranscriptPanel
-            lines={lines}
-            emptyMessage="按住说话或发送文字，对话记录将实时呈现在这里。"
-          />
-          <ControlPanel
+    <main className="shell" aria-label="实时伴侣主界面">
+      {/* 居中全屏 Mate 舞台 */}
+      <FurinaCompanion
+        state={state}
+        emotion={emotion}
+        assistantText={assistantText}
+        notice={error ?? notice}
+        onSendText={onSendText}
+      />
+
+      {/* 顶部四周悬浮 HUD 栏（左：品牌与状态；右：复杂仪表盘 Dialog 入口） */}
+      <TopBar
+        state={state}
+        actions={
+          <DashboardDialog
             state={state}
-            notice={notice}
-            disabled={disabled}
+            error={error}
+            sessionId={sessionId}
+            emotion={emotion}
             muted={muted}
-            onSessionAction={onSessionAction}
-            onEndSession={onEndSession}
-            onToggleMute={onToggleMute}
-            onStartVoice={onStartVoice}
-            onStopVoice={onStopVoice}
+            lines={lines}
             onSendText={onSendText}
           />
-        </section>
-      </section>
-      <footer>
-        <span>VoiceMate 灵矽AI 伴侣系统</span>
-        <span>HTTP / WebSocket · Qiniu Linx AI</span>
-      </footer>
+        }
+      />
+
+      {/* 底部四周悬浮语音控制坞 */}
+      <ControlPanel
+        state={state}
+        notice={notice}
+        disabled={disabled}
+        muted={muted}
+        onSessionAction={onSessionAction}
+        onEndSession={onEndSession}
+        onToggleMute={onToggleMute}
+        onStartVoice={onStartVoice}
+        onStopVoice={onStopVoice}
+        onSendText={onSendText}
+      />
     </main>
   );
 }
