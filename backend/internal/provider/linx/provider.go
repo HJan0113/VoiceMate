@@ -569,13 +569,12 @@ var sadKeywords = []string{
 	"伤心", "难过", "哭泣", "流泪", "委屈", "失落", "落泪", "痛苦", "悲伤", "抽泣", "呜呜", "想哭",
 }
 
-// explicitNonNeutralEmotions 列出模型返回的其他明确具体情绪
+// explicitNonNeutralEmotions 列出模型返回的其他明确具体情绪（不含中间态 thinking）
 var explicitNonNeutralEmotions = map[string]bool{
 	"angry":       true,
 	"embarrassed": true,
 	"surprised":   true,
 	"shocked":     true,
-	"thinking":    true,
 	"sleepy":      true,
 	"confused":    true,
 	"proud":       true,
@@ -594,37 +593,40 @@ var personalSadPattern = regexp.MustCompile(`(?:(?:我.*?|好|真|太|极|非常
 var negSadPattern = regexp.MustCompile(`(?:(?:别|不要|不用|不用再|不再|不)(?:哭|伤心|难过|流泪|落泪|哭泣|抽泣)|不哭不闹)`)
 
 func parseEmotion(emotion, text, action string) string {
-	raw := strings.ToLower(strings.TrimSpace(emotion))
+	// 1. 优先检查动作指示 (action)：在灵矽与硬件伴侣体系中，action 是指示虚拟化身执行具体动画/微动的最高优先级指令
+	act := strings.ToLower(strings.TrimSpace(action))
+	if act != "" && act != "thinking" && act != "none" && act != "idle" {
+		if happySimilarEmotions[act] {
+			return "happy"
+		}
+		if sadSimilarEmotions[act] {
+			return "sad"
+		}
+		for k := range happySimilarEmotions {
+			if strings.Contains(act, k) {
+				return "happy"
+			}
+		}
+		for k := range sadSimilarEmotions {
+			if strings.Contains(act, k) {
+				return "sad"
+			}
+		}
+	}
 
-	// 1. 若模型返回明确的开心类情绪
+	// 2. 检查情绪标签 (emotion)
+	raw := strings.ToLower(strings.TrimSpace(emotion))
 	if happySimilarEmotions[raw] {
 		return "happy"
 	}
-
-	// 2. 若模型返回明确的伤心类情绪
 	if sadSimilarEmotions[raw] {
 		return "sad"
 	}
-
-	// 3. 若为模型返回的其他明确具体情绪（如 proud, angry, thinking 等），直接遵从模型意图
 	if explicitNonNeutralEmotions[raw] {
 		return raw
 	}
 
-	// 4. 若有明确的动作（action）指示
-	act := strings.ToLower(strings.TrimSpace(action))
-	for k := range happySimilarEmotions {
-		if strings.Contains(act, k) {
-			return "happy"
-		}
-	}
-	for k := range sadSimilarEmotions {
-		if strings.Contains(act, k) {
-			return "sad"
-		}
-	}
-
-	// 5. 检查文本中直观的 emoji 表情符
+	// 3. 检查文本中直观的 emoji 表情符
 	for _, kw := range sadEmojis {
 		if strings.Contains(text, kw) {
 			return "sad"
@@ -636,20 +638,20 @@ func parseEmotion(emotion, text, action string) string {
 		}
 	}
 
-	// 6. 检查是否为安慰他人、追问委屈、主持公道等非自身情绪文本（如“哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道...”）
+	// 4. 检查是否为安慰他人、追问委屈、主持公道等非自身情绪文本（如“哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道...”）
 	if comfortInquiryPattern.MatchString(text) {
-		if raw != "" && raw != "neutral" {
+		if raw != "" && raw != "neutral" && raw != "thinking" && raw != "none" {
 			return raw
 		}
 		return "idle"
 	}
 
-	// 7. 检查明确的第一人称自身难过表达（如“我不开心”、“开心不起来”、“好难过”）
+	// 5. 检查明确的第一人称自身难过表达（如“我不开心”、“开心不起来”、“好难过”）
 	if personalSadPattern.MatchString(text) {
 		return "sad"
 	}
 
-	// 8. 检查常规伤心词（排除被“别哭”、“不要难过”等否定词修饰的片段）
+	// 6. 检查常规伤心词（排除被“别哭”、“不要难过”等否定词修饰的片段）
 	cleanedSadText := negSadPattern.ReplaceAllString(text, "")
 	for _, kw := range sadKeywords {
 		if strings.Contains(cleanedSadText, kw) {
@@ -657,7 +659,7 @@ func parseEmotion(emotion, text, action string) string {
 		}
 	}
 
-	// 9. 检查常规开心词（排除被“不开心”、“不怎么高兴”、“笑不出来”等否定修饰的片段）
+	// 7. 检查常规开心词（排除被“不开心”、“不怎么高兴”、“笑不出来”等否定修饰的片段）
 	cleanedHappyText := negHappyPattern.ReplaceAllString(text, "")
 	for _, kw := range happyKeywords {
 		if strings.Contains(cleanedHappyText, kw) {
@@ -673,9 +675,12 @@ func parseEmotion(emotion, text, action string) string {
 
 func isHappyTrigger(toolName string, args map[string]any) bool {
 	if args != nil {
-		for _, k := range []string{"emotion", "animation", "action", "name", "state"} {
+		for _, k := range []string{"action", "animation", "emotion", "name", "state"} {
 			if v, ok := args[k]; ok {
 				s := strings.ToLower(fmt.Sprintf("%v", v))
+				if s == "thinking" || s == "none" || s == "idle" {
+					continue
+				}
 				if negHappyPattern.MatchString(s) {
 					continue
 				}
@@ -706,9 +711,12 @@ func isHappyTrigger(toolName string, args map[string]any) bool {
 
 func isSadTrigger(toolName string, args map[string]any) bool {
 	if args != nil {
-		for _, k := range []string{"emotion", "animation", "action", "name", "state"} {
+		for _, k := range []string{"action", "animation", "emotion", "name", "state"} {
 			if v, ok := args[k]; ok {
 				s := strings.ToLower(fmt.Sprintf("%v", v))
+				if s == "thinking" || s == "none" || s == "idle" {
+					continue
+				}
 				if negSadPattern.MatchString(s) {
 					continue
 				}

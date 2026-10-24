@@ -188,7 +188,13 @@ func TestParseEmotion(t *testing.T) {
 		{emotion: "", text: "", action: "crying_tears", expected: "sad"},
 		{emotion: "", text: "", action: "sad_face", expected: "sad"},
 
-		// 核心测试用例：含“不开心”的安慰/主持公道句式，严禁误判为开心 (happy)
+		// 动作指令 (action) 优先：即使 emotion 处于中间流式 thinking 状态，action 明确指定 sad/happy 时必须正确触发
+		{emotion: "thinking", text: "🤔", action: "sad", expected: "sad"},
+		{emotion: "thinking", text: "🤔", action: "happy", expected: "happy"},
+		{emotion: "thinking", text: "🤔", action: "thinking", expected: "thinking"},
+		{emotion: "", text: "哎呀，我的首席观众怎么落泪了？本水神的舞台可不允许悲伤的阴云笼罩呢。快说说，是谁惹你不开心了？", action: "sad", expected: "sad"},
+
+		// 核心测试用例：含“不开心”的安慰/主持公道句式，无动作指示时严禁误判为开心 (happy)
 		{emotion: "", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "idle"},
 		{emotion: "neutral", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "idle"},
 		{emotion: "proud", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "proud"},
