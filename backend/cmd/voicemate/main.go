@@ -24,7 +24,7 @@ func main() {
 	}
 	app := application.NewService()
 	api := handler.New(app)
-	rt := realtime.NewServer(app, fake.NewProvider())
+	rt := realtime.NewServer(app, fake.NewProvider(), origin)
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery(), middleware.CORS(origin))
 	router.GET("/health/live", api.Live)

@@ -20,8 +20,23 @@ type Server struct {
 	upgrader websocket.Upgrader
 }
 
-func NewServer(app *application.Service, p provider.Provider) *Server {
-	return &Server{app: app, provider: p, upgrader: websocket.Upgrader{ReadBufferSize: 4096, WriteBufferSize: 4096, CheckOrigin: func(*http.Request) bool { return true }}}
+func NewServer(app *application.Service, p provider.Provider, allowedOrigins ...string) *Server {
+	origin := ""
+	if len(allowedOrigins) > 0 {
+		origin = allowedOrigins[0]
+	}
+	return &Server{
+		app:      app,
+		provider: p,
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  4096,
+			WriteBufferSize: 4096,
+			CheckOrigin: func(request *http.Request) bool {
+				requestOrigin := request.Header.Get("Origin")
+				return requestOrigin == "" || origin == "" || requestOrigin == origin
+			},
+		},
+	}
 }
 
 type control struct {
@@ -36,6 +51,10 @@ type control struct {
 const maxMessageBytes = 64 * 1024
 
 func (s *Server) Handle(c *gin.Context) {
+	if c.Query("sessionId") == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "SESSION_ID_REQUIRED", "message": "sessionId is required"}})
+		return
+	}
 	connection, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
@@ -48,7 +67,7 @@ func (s *Server) Handle(c *gin.Context) {
 		return
 	}
 	var auth control
-	if json.Unmarshal(raw, &auth) != nil || auth.Type != "auth" {
+	if json.Unmarshal(raw, &auth) != nil || auth.Type != "auth" || auth.Token == "" {
 		_ = connection.WriteJSON(gin.H{"type": "error", "code": "AUTH_REQUIRED"})
 		return
 	}
@@ -70,15 +89,24 @@ func (s *Server) Handle(c *gin.Context) {
 
 	var stream provider.Stream
 	var streamMu sync.Mutex
+	closeStream := func(interrupt bool) {
+		streamMu.Lock()
+		active := stream
+		stream = nil
+		streamMu.Unlock()
+		if active == nil {
+			return
+		}
+		if interrupt {
+			active.Interrupt()
+		} else {
+			active.Close()
+		}
+	}
 	for {
 		messageType, data, readErr := connection.ReadMessage()
 		if readErr != nil {
-			streamMu.Lock()
-			active := stream
-			streamMu.Unlock()
-			if active != nil {
-				active.Close()
-			}
+			closeStream(false)
 			return
 		}
 		if messageType == websocket.BinaryMessage {
@@ -92,12 +120,7 @@ func (s *Server) Handle(c *gin.Context) {
 			streamMu.Unlock()
 			if active != nil {
 				if err := active.SendAudio(payload); err != nil {
-					active.Close()
-					streamMu.Lock()
-					if stream == active {
-						stream = nil
-					}
-					streamMu.Unlock()
+					closeStream(false)
 					_ = writeJSON(gin.H{"type": "error", "code": "UPSTREAM_UNAVAILABLE", "retryable": true})
 				}
 			}
@@ -114,25 +137,34 @@ func (s *Server) Handle(c *gin.Context) {
 				_ = writeJSON(gin.H{"type": "error", "code": "UNSUPPORTED_PROTOCOL_VERSION"})
 			}
 		case "turn.start":
-			streamMu.Lock()
-			if stream != nil {
-				stream.Close()
+			if message.ClientTurnID == "" {
+				_ = writeJSON(gin.H{"type": "error", "code": "TURN_ID_REQUIRED"})
+				continue
 			}
-			stream, err = s.provider.Open(c, session.CharacterID, message.ClientTurnID)
-			streamMu.Unlock()
-			if err != nil {
+			closeStream(true)
+			opened, openErr := s.provider.Open(c.Request.Context(), session.CharacterID, message.ClientTurnID)
+			if openErr != nil {
 				_ = writeJSON(gin.H{"type": "error", "code": "UPSTREAM_UNAVAILABLE", "retryable": true})
 				continue
 			}
+			streamMu.Lock()
+			stream = opened
+			streamMu.Unlock()
 			_ = writeJSON(gin.H{"type": "turn.started", "clientTurnId": message.ClientTurnID, "turnId": message.ClientTurnID, "streamId": 1})
-			go s.forwardEvents(connection, &writeMu, stream)
+			go s.forwardEvents(connection, &writeMu, opened)
 		case "turn.stop":
-			if stream != nil {
-				stream.Stop()
+			streamMu.Lock()
+			active := stream
+			streamMu.Unlock()
+			if active != nil {
+				active.Stop()
 			}
 		case "turn.interrupt":
-			if stream != nil {
-				stream.Interrupt()
+			streamMu.Lock()
+			active := stream
+			streamMu.Unlock()
+			if active != nil {
+				closeStream(true)
 				_ = writeJSON(gin.H{"type": "turn.interrupted", "turnId": message.TurnID})
 			}
 		case "ping":
@@ -146,6 +178,7 @@ func (s *Server) Handle(c *gin.Context) {
 func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, stream provider.Stream) {
 	for event := range stream.Events() {
 		writeMu.Lock()
+		var err error
 		switch event.Type {
 		case "audio.chunk":
 			header := make([]byte, 16)
@@ -154,11 +187,11 @@ func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, 
 			binary.BigEndian.PutUint32(header[4:8], event.StreamID)
 			binary.BigEndian.PutUint32(header[8:12], event.Sequence)
 			binary.BigEndian.PutUint32(header[12:16], uint32(len(event.Audio))) //nolint:gosec // audio chunk payload length fits in uint32
-			_ = connection.WriteMessage(websocket.BinaryMessage, append(header, event.Audio...))
+			err = connection.WriteMessage(websocket.BinaryMessage, append(header, event.Audio...))
 		case "audio.meta":
-			_ = connection.WriteJSON(gin.H{"type": event.Type, "turnId": event.TurnID, "streamId": event.StreamID, "codec": event.Codec, "sampleRate": event.SampleRate})
+			err = connection.WriteJSON(gin.H{"type": event.Type, "turnId": event.TurnID, "streamId": event.StreamID, "codec": event.Codec, "sampleRate": event.SampleRate})
 		case "audio.end":
-			_ = connection.WriteJSON(gin.H{"type": event.Type, "turnId": event.TurnID, "streamId": event.StreamID})
+			err = connection.WriteJSON(gin.H{"type": event.Type, "turnId": event.TurnID, "streamId": event.StreamID})
 		default:
 			payload := gin.H{"type": event.Type, "turnId": event.TurnID}
 			if event.Text != "" {
@@ -168,9 +201,13 @@ func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, 
 				payload["emotion"] = event.Emotion
 				payload["intensity"] = event.Intensity
 			}
-			_ = connection.WriteJSON(payload)
+			err = connection.WriteJSON(payload)
 		}
 		writeMu.Unlock()
+		if err != nil {
+			stream.Close()
+			return
+		}
 	}
 }
 
@@ -178,9 +215,9 @@ func parseUplinkAudioFrame(data []byte) ([]byte, bool) {
 	if len(data) < 16 || data[0] != 1 || data[1] != 1 {
 		return nil, false
 	}
-	payloadBytes := int(binary.BigEndian.Uint32(data[12:16]))
+	payloadBytes := binary.BigEndian.Uint32(data[12:16])
 	payload := data[16:]
-	if len(payload) != payloadBytes {
+	if uint64(payloadBytes) != uint64(len(payload)) {
 		return nil, false
 	}
 	return payload, true
