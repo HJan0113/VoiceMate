@@ -1,0 +1,577 @@
+openapi: 3.1.0
+info:
+  title: VoiceMate API
+  version: 0.1.0
+  description: |
+    VoiceMate 前后端分离脚手架的 HTTP contract。
+    实时语音控制面使用 WebSocket，见 /api/v1/realtime/connect 的扩展说明。
+  license:
+    name: Private development scaffold
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: Health
+  - name: Auth
+  - name: Characters
+  - name: Realtime
+  - name: Conversations
+paths:
+  /openapi.yaml:
+    get:
+      tags: [Health]
+      operationId: getOpenApiContract
+      summary: Download this OpenAPI contract
+      responses:
+        '200':
+          description: OpenAPI YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /health/live:
+    get:
+      tags: [Health]
+      operationId: getLiveness
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Process is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+
+  /health/ready:
+    get:
+      tags: [Health]
+      operationId: getReadiness
+      summary: Readiness probe
+      responses:
+        '200':
+          description: Process can accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: ready
+                provider: fake
+
+  /api/v1/auth/anonymous:
+    post:
+      tags: [Auth]
+      operationId: createAnonymousIdentity
+      summary: Create a development anonymous identity
+      description: |
+        当前脚手架返回开发用 access token、refresh token 和 deviceId。
+        生产实现应改为 HttpOnly refresh cookie 和短期 access token。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '200':
+          description: Anonymous identity created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnonymousIdentity'
+              example:
+                accessToken: dev-access-token
+                refreshToken: dev-refresh-token
+                deviceId: dev-device
+
+  /api/v1/characters:
+    get:
+      tags: [Characters]
+      operationId: listCharacters
+      summary: List available characters
+      responses:
+        '200':
+          description: Character list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CharacterListResponse'
+
+  /api/v1/realtime/sessions:
+    post:
+      tags: [Realtime]
+      operationId: createRealtimeSession
+      summary: Create a short-lived realtime session
+      description: |
+        创建成功后，客户端使用 ephemeralToken 作为 WebSocket 首帧 auth.token。
+        wsUrl 当前为相对路径，前端应使用 API origin 补全，不要把 token 放到 URL。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+            example:
+              characterId: furina
+              conversationId: conv_existing
+      responses:
+        '201':
+          description: Realtime session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeSession'
+        '400':
+          description: Invalid JSON body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Character does not exist or is inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/conversations:
+    get:
+      tags: [Conversations]
+      operationId: listConversations
+      summary: List conversations
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationListResponse'
+
+  /api/v1/realtime/connect:
+    get:
+      tags: [Realtime]
+      operationId: connectRealtime
+      summary: Upgrade to a realtime WebSocket
+      description: |
+        该路径由 HTTP GET 升级为 WebSocket，不是普通 JSON API。
+        连接后客户端必须在 5 秒内发送 auth 首帧；服务端随后发送 session.ready。
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '101':
+          description: WebSocket protocol upgrade
+      x-websocket:
+        version: 1
+        authentication:
+          firstClientMessage:
+            $ref: '#/components/schemas/WsAuthMessage'
+        clientMessages:
+          - $ref: '#/components/schemas/WsSessionStartMessage'
+          - $ref: '#/components/schemas/WsTurnStartMessage'
+          - $ref: '#/components/schemas/WsTurnStopMessage'
+          - $ref: '#/components/schemas/WsTurnInterruptMessage'
+          - $ref: '#/components/schemas/WsPingMessage'
+        serverMessages:
+          - $ref: '#/components/schemas/WsSessionReadyMessage'
+          - $ref: '#/components/schemas/WsTurnStartedMessage'
+          - $ref: '#/components/schemas/WsTurnInterruptedMessage'
+          - $ref: '#/components/schemas/WsTranscriptMessage'
+          - $ref: '#/components/schemas/WsResponseDeltaMessage'
+          - $ref: '#/components/schemas/WsEmotionChangedMessage'
+          - $ref: '#/components/schemas/WsAudioMetaMessage'
+          - $ref: '#/components/schemas/WsAudioEndMessage'
+          - $ref: '#/components/schemas/WsTurnCompletedMessage'
+          - $ref: '#/components/schemas/WsPongMessage'
+          - $ref: '#/components/schemas/WsErrorMessage'
+        binaryFrames:
+          description: |
+            Binary PCM frame uses a 16-byte network-byte-order header followed by payload.
+            version(1), kind(1), reserved(2), streamId(4), sequence(4), payloadBytes(4).
+            kind 1 is microphone uplink; kind 2 is synthesized audio downlink.
+          mediaType: application/octet-stream
+
+components:
+  parameters:
+    SessionId:
+      name: sessionId
+      in: query
+      required: true
+      description: Session ID returned by POST /api/v1/realtime/sessions
+      schema:
+        type: string
+        minLength: 1
+      example: sess_123
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+
+    ReadinessResponse:
+      type: object
+      required: [status, provider]
+      properties:
+        status:
+          type: string
+          const: ready
+        provider:
+          type: string
+          example: fake
+
+    AnonymousIdentity:
+      type: object
+      required: [accessToken, refreshToken, deviceId]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        deviceId:
+          type: string
+
+    EmotionProfile:
+      type: object
+      required: [video, playbackRate]
+      properties:
+        video:
+          type: string
+          description: Resource path or signed URL for the emotion asset
+        playbackRate:
+          type: number
+          format: float
+          minimum: 0.1
+
+    Character:
+      type: object
+      required: [id, slug, displayName, status, voiceProfile, emotionProfiles]
+      properties:
+        id:
+          type: string
+          example: furina
+        slug:
+          type: string
+          example: furina
+        displayName:
+          type: string
+          example: 芙宁娜
+        status:
+          type: string
+          enum: [active, inactive]
+        voiceProfile:
+          type: string
+          example: qiniu-placeholder
+        emotionProfiles:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/EmotionProfile'
+
+    CharacterListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Character'
+
+    CreateSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        characterId:
+          type: string
+          default: furina
+        conversationId:
+          type: string
+
+    AudioFormat:
+      type: object
+      required: [codec, sampleRate, channels]
+      properties:
+        codec:
+          type: string
+          enum: [pcm_s16le]
+        sampleRate:
+          type: integer
+          enum: [16000, 24000]
+        channels:
+          type: integer
+          const: 1
+
+    RealtimeSession:
+      type: object
+      required: [sessionId, conversationId, wsUrl, ephemeralToken, expiresAt, audio]
+      properties:
+        sessionId:
+          type: string
+          example: sess_123
+        conversationId:
+          type: string
+          example: conv_123
+        wsUrl:
+          type: string
+          format: uri-reference
+          example: /api/v1/realtime/connect?sessionId=sess_123
+        ephemeralToken:
+          type: string
+          description: Short-lived token for the first WebSocket auth frame
+        expiresAt:
+          type: string
+          format: date-time
+        audio:
+          type: object
+          required: [input, output]
+          properties:
+            input:
+              $ref: '#/components/schemas/AudioFormat'
+            output:
+              $ref: '#/components/schemas/AudioFormat'
+
+    Conversation:
+      type: object
+      required: [id, characterId, title, createdAt]
+      properties:
+        id:
+          type: string
+        characterId:
+          type: string
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ConversationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: INVALID_BODY
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+
+    WsAuthMessage:
+      type: object
+      required: [type, token, protocolVersion]
+      properties:
+        type:
+          type: string
+          const: auth
+        token:
+          type: string
+        protocolVersion:
+          type: integer
+          const: 1
+
+    WsSessionStartMessage:
+      type: object
+      required: [type, protocolVersion]
+      properties:
+        type:
+          type: string
+          const: session.start
+        protocolVersion:
+          type: integer
+          const: 1
+
+    WsTurnStartMessage:
+      type: object
+      required: [type, clientTurnId]
+      properties:
+        type:
+          type: string
+          const: turn.start
+        clientTurnId:
+          type: string
+
+    WsTurnStopMessage:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: turn.stop
+
+    WsTurnInterruptMessage:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: turn.interrupt
+        turnId:
+          type: string
+
+    WsPingMessage:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: ping
+
+    WsSessionReadyMessage:
+      type: object
+      required: [type, sessionId, serverTime]
+      properties:
+        type:
+          type: string
+          const: session.ready
+        sessionId:
+          type: string
+        serverTime:
+          type: string
+          format: date-time
+
+    WsTurnStartedMessage:
+      type: object
+      required: [type, clientTurnId, turnId, streamId]
+      properties:
+        type:
+          type: string
+          const: turn.started
+        clientTurnId:
+          type: string
+        turnId:
+          type: string
+        streamId:
+          type: integer
+
+    WsTranscriptMessage:
+      type: object
+      required: [type, turnId, text]
+      properties:
+        type:
+          type: string
+          enum: [transcript.partial, transcript.final]
+        turnId:
+          type: string
+        text:
+          type: string
+
+    WsResponseDeltaMessage:
+      type: object
+      required: [type, turnId, text]
+      properties:
+        type:
+          type: string
+          const: response.delta
+        turnId:
+          type: string
+        text:
+          type: string
+
+    WsEmotionChangedMessage:
+      type: object
+      required: [type, turnId, emotion, intensity]
+      properties:
+        type:
+          type: string
+          const: emotion.changed
+        turnId:
+          type: string
+        emotion:
+          type: string
+        intensity:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    WsAudioMetaMessage:
+      type: object
+      required: [type, turnId, streamId, codec, sampleRate]
+      properties:
+        type:
+          type: string
+          const: audio.meta
+        turnId:
+          type: string
+        streamId:
+          type: integer
+        codec:
+          type: string
+          const: pcm_s16le
+        sampleRate:
+          type: integer
+          const: 24000
+
+    WsAudioEndMessage:
+      type: object
+      required: [type, turnId, streamId]
+      properties:
+        type:
+          type: string
+          const: audio.end
+        turnId:
+          type: string
+        streamId:
+          type: integer
+
+    WsTurnCompletedMessage:
+      type: object
+      required: [type, turnId]
+      properties:
+        type:
+          type: string
+          const: turn.completed
+        turnId:
+          type: string
+
+    WsTurnInterruptedMessage:
+      type: object
+      required: [type, turnId]
+      properties:
+        type:
+          type: string
+          const: turn.interrupted
+        turnId:
+          type: string
+
+    WsPongMessage:
+      type: object
+      required: [type, ts]
+      properties:
+        type:
+          type: string
+          const: pong
+        ts:
+          type: integer
+          format: int64
+
+    WsErrorMessage:
+      type: object
+      required: [type, code]
+      properties:
+        type:
+          type: string
+          const: error
+        code:
+          type: string
+        retryable:
+          type: boolean
+

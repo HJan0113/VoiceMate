@@ -1,3 +1,39 @@
 # VoiceMate
 
-VoiceMate 是一个结合七牛云「灵矽 AI」打造的实时语音聊天伙伴。项目通过接入灵矽 AI 的语音识别（ASR）、大语言模型对话与语音合成r能力，提供低延迟的双向语音对话与拟人化陪伴交互体验。
+VoiceMate 是一个基于七牛灵矽 AI 的实时语音聊天伙伴脚手架。
+
+项目只保留两个部分：
+
+- `frontend/`：React，负责界面、麦克风 PCM 采集、WebSocket 客户端和 Node 依赖。
+- `backend/`：Go + Gin，负责 REST API、WebSocket 实时桥接和 AI Provider 适配接口。
+
+## 本地启动
+
+前端：
+
+```bash
+cd frontend
+pnpm install
+pnpm dev   # http://localhost:5173
+```
+
+后端：
+
+```bash
+cd backend
+go run ./cmd/voicemate   # http://localhost:8080
+```
+
+前端质量检查：
+
+```bash
+cd frontend
+pnpm format        # 按项目规则格式化 TypeScript / TSX
+pnpm format:check  # 只检查格式，不修改文件
+pnpm lint          # oxlint
+pnpm exec lefthook install
+```
+
+`lefthook.yml` 会在提交前自动运行前后端格式化和 lint；前端的规则配置位于 `frontend/.oxlintrc.json` 和 `frontend/.oxfmtrc.json`。
+
+HTTP 与 WebSocket contract：[`backend/openapi.yaml`](backend/openapi.yaml)。后端启动后也可访问 `http://localhost:8080/openapi.yaml`。

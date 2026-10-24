@@ -1,0 +1,34 @@
+export type Character = {
+  id: string;
+  displayName: string;
+  status: string;
+  voiceProfile: string;
+  emotionProfiles: Record<string, { video: string; playbackRate: number }>;
+};
+
+export type Session = {
+  sessionId: string;
+  conversationId: string;
+  wsUrl: string;
+  ephemeralToken: string;
+  expiresAt: string;
+  audio: { input: AudioFormat; output: AudioFormat };
+};
+
+export type AudioFormat = {
+  codec: string;
+  sampleRate: number;
+  channels: number;
+};
+
+export type ServerEvent = {
+  type: string;
+  sessionId?: string;
+  turnId?: string;
+  streamId?: number;
+  text?: string;
+  emotion?: string;
+  intensity?: number;
+  codec?: string;
+  sampleRate?: number;
+};
