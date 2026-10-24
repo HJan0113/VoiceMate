@@ -46,7 +46,7 @@ func TestReadLoopDisconnectDoesNotDeadlock(t *testing.T) {
 			if err != nil {
 				return
 			}
-			defer c.Close()
+			defer func() { _ = c.Close() }()
 
 			// Read hello
 			_, _, err = c.ReadMessage()
@@ -54,7 +54,7 @@ func TestReadLoopDisconnectDoesNotDeadlock(t *testing.T) {
 				return
 			}
 			// Reply hello
-			_ = c.WriteJSON(map[string]interface{}{
+			_ = c.WriteJSON(map[string]any{
 				"type":       "hello",
 				"session_id": "mock_session_123",
 			})
@@ -76,7 +76,7 @@ func TestReadLoopDisconnectDoesNotDeadlock(t *testing.T) {
 		}
 
 		// OTA Gateway endpoint
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"websocket": map[string]string{
 				"url":   "ws://" + r.Host + "/ws",
 				"token": "mock_token",

@@ -60,18 +60,18 @@ type otaResponse struct {
 }
 
 func (p *Provider) getLinxToken() (string, string, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"version":     0,
 		"uuid":        p.cfg.ClientID,
 		"mac_address": p.cfg.DeviceMAC,
-		"application": map[string]interface{}{
+		"application": map[string]any{
 			"name":         "voicemate-web",
 			"version":      "1.0.0",
 			"compile_time": "2026-10-23 17:00:00",
 			"idf_version":  "1.0.0",
 			"elf_sha256":   "1234567890abcdef1234567890abcdef1234567890abcdef",
 		},
-		"board": map[string]interface{}{
+		"board": map[string]any{
 			"type":    "voicemate-web",
 			"ssid":    "local",
 			"rssi":    0,
@@ -85,7 +85,7 @@ func (p *Provider) getLinxToken() (string, string, error) {
 		return "", "", err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "POST", p.cfg.OTAGateway, bytes.NewBuffer(bodyBytes)) //nolint:gosec // gateway URL is provided via configuration
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.cfg.OTAGateway, bytes.NewBuffer(bodyBytes)) //nolint:gosec // gateway URL is provided via configuration
 	if err != nil {
 		return "", "", err
 	}
@@ -101,7 +101,7 @@ func (p *Provider) getLinxToken() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -137,19 +137,22 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 	header.Set("Protocol-Version", "1")
 
 	dialer := websocket.DefaultDialer
-	conn, _, err := dialer.DialContext(ctx, wsURL, header) //nolint:gosec // websocket URL is provided by OTA gateway
+	conn, resp, err := dialer.DialContext(ctx, wsURL, header) //nolint:gosec // websocket URL is provided by OTA gateway
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
+	}
 	if err != nil {
 		return fmt.Errorf("linx dial error: %w", err)
 	}
 
-	helloMsg := map[string]interface{}{
+	helloMsg := map[string]any{
 		"type":      "hello",
 		"version":   1,
 		"transport": "websocket",
-		"features": map[string]interface{}{
+		"features": map[string]any{
 			"mcp": true,
 		},
-		"audio_params": map[string]interface{}{
+		"audio_params": map[string]any{
 			"format":         "pcm",
 			"sample_rate":    16000,
 			"channels":       1,
@@ -158,7 +161,7 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 		},
 	}
 	if err := conn.WriteJSON(helloMsg); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("linx send hello error: %w", err)
 	}
 
@@ -167,7 +170,7 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 	_, respData, err := conn.ReadMessage()
 	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("linx read hello response error: %w", err)
 	}
 
@@ -176,7 +179,7 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 		SessionID string `json:"session_id"`
 	}
 	if err := json.Unmarshal(respData, &helloResp); err != nil || helloResp.SessionID == "" {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("invalid linx hello response: %s", string(respData))
 	}
 
@@ -325,7 +328,7 @@ func (p *Provider) Open(ctx context.Context, _ string, turnID string) (provider.
 	p.stream = s
 
 	// 发送 listen: start（按住通话模式使用 manual）
-	startMsg := map[string]interface{}{
+	startMsg := map[string]any{
 		"session_id": p.sessionID,
 		"type":       "listen",
 		"state":      "start",
@@ -335,7 +338,7 @@ func (p *Provider) Open(ctx context.Context, _ string, turnID string) (provider.
 	err := p.conn.WriteJSON(startMsg)
 	p.writeMu.Unlock()
 	if err != nil {
-		p.conn.Close()
+		_ = p.conn.Close()
 		p.conn = nil
 		return nil, fmt.Errorf("linx start turn error: %w", err)
 	}
@@ -400,7 +403,7 @@ func (s *stream) SendText(text string) error {
 	case <-s.cancel:
 		return errors.New("stream closed")
 	default:
-		msg := map[string]interface{}{
+		msg := map[string]any{
 			"session_id": s.provider.getSessionID(),
 			"type":       "listen",
 			"state":      "detect",
@@ -416,7 +419,7 @@ func (s *stream) Events() <-chan provider.Event {
 
 func (s *stream) Stop() {
 	s.stop.Do(func() {
-		stopMsg := map[string]interface{}{
+		stopMsg := map[string]any{
 			"session_id": s.provider.getSessionID(),
 			"type":       "listen",
 			"state":      "stop",
@@ -443,7 +446,7 @@ func (s *stream) Stop() {
 func (s *stream) Interrupt() {
 	s.close.Do(func() {
 		// 向灵矽 AI 下发 abort 终止指令
-		abortMsg := map[string]interface{}{
+		abortMsg := map[string]any{
 			"session_id": s.provider.getSessionID(),
 			"type":       "abort",
 		}
