@@ -355,7 +355,6 @@ footer {
   }
 }
 
-
 /* Furina Companion Component Styles */
 .furina-companion-container {
   display: flex;
@@ -446,7 +445,9 @@ footer {
   cursor: pointer;
   z-index: 10;
   border-radius: 12px;
-  transition: background 0.2s, outline 0.2s;
+  transition:
+    background 0.2s,
+    outline 0.2s;
 }
 
 .hitbox-head {
@@ -524,4 +525,148 @@ footer {
 .quick-action-btn:hover {
   background: #f3f4f6;
   border-color: #9ca3af;
+}
+
+/* Realtime Phone Call Control Styles */
+.call-status-header {
+  margin-bottom: 14px;
+}
+
+.call-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.call-start {
+  background: #10b981;
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+}
+
+.call-start:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.call-connecting {
+  background: #f59e0b;
+  color: #ffffff;
+  cursor: not-allowed;
+}
+
+.call-hangup {
+  flex: 1;
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+}
+
+.call-hangup:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.in-call-controls {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.call-sub-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.call-sub-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.call-sub-btn.muted {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.call-pulse {
+  animation: call-pulse-anim 1.2s infinite ease-in-out;
+}
+
+@keyframes call-pulse-anim {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.call-chat-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.call-chat-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.call-chat-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.call-chat-send {
+  padding: 10px 18px;
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.call-chat-send:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.call-chat-send:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
 }

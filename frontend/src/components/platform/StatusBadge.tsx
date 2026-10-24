@@ -2,11 +2,12 @@ import type { ConnectionState } from "../../domain/types";
 
 const labels: Record<ConnectionState, string> = {
   idle: "未连接",
-  connecting: "连接中",
+  connecting: "呼叫中",
   ready: "在线",
-  listening: "输入中",
+  calling: "通话中",
+  listening: "倾听中",
   processing: "处理中",
-  speaking: "输出中",
+  speaking: "说话中",
   error: "连接异常",
 };
 

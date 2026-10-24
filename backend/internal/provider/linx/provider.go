@@ -162,7 +162,28 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 		return fmt.Errorf("linx send hello error: %w", err)
 	}
 
+	// 同步等待并读取 Linx AI 的 hello 握手响应，必须先提取真正的 session_id
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, respData, err := conn.ReadMessage()
+	_ = conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("linx read hello response error: %w", err)
+	}
+
+	var helloResp struct {
+		Type      string `json:"type"`
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(respData, &helloResp); err != nil || helloResp.SessionID == "" {
+		conn.Close()
+		return fmt.Errorf("invalid linx hello response: %s", string(respData))
+	}
+
 	p.conn = conn
+	p.sessionID = helloResp.SessionID
+	log.Printf("[Linx Provider] Connected to Linx AI successfully. Session ID: %s", p.sessionID)
+
 	go p.readLoop(conn)
 	return nil
 }
@@ -232,7 +253,7 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 		case "llm":
 			emotion := event.Emotion
 			if emotion == "" {
-				emotion = "neutral"
+				emotion = "happy"
 			}
 			active.emit(provider.Event{
 				Type:      "emotion.changed",
@@ -259,14 +280,11 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 					})
 				}
 			case "stop":
+				// 一句播报完毕：下发 audio.end，但不关闭当前 stream，保持实时全双工电话通道畅通
 				active.emit(provider.Event{
 					Type:     "audio.end",
 					TurnID:   active.turnID,
 					StreamID: 1,
-				})
-				active.emit(provider.Event{
-					Type:   "turn.completed",
-					TurnID: active.turnID,
 				})
 			}
 		}
@@ -288,7 +306,7 @@ func (p *Provider) Open(ctx context.Context, _ string, turnID string) (provider.
 	s := newStream(turnID, p)
 	p.stream = s
 
-	// 发送 listen: start
+	// 发送 listen: start，指定 mode: auto 开启云端全双工实时 VAD 电话交互
 	startMsg := map[string]interface{}{
 		"session_id": p.sessionID,
 		"type":       "listen",
@@ -353,23 +371,38 @@ func (s *stream) SendAudio(payload []byte) error {
 	}
 }
 
+func (s *stream) SendText(text string) error {
+	select {
+	case <-s.cancel:
+		return errors.New("stream closed")
+	default:
+		msg := map[string]interface{}{
+			"session_id": s.provider.sessionID,
+			"type":       "listen",
+			"state":      "detect",
+			"text":       text,
+		}
+		return s.provider.writeJSON(msg)
+	}
+}
+
 func (s *stream) Events() <-chan provider.Event {
 	return s.events
 }
 
 func (s *stream) Stop() {
-	s.stop.Do(func() {
-		stopMsg := map[string]interface{}{
-			"session_id": s.provider.sessionID,
-			"type":       "listen",
-			"state":      "stop",
-		}
-		_ = s.provider.writeJSON(stopMsg)
-	})
+	// 在实时全双工电话模式下，云端基于 VAD 自动检测停顿，无需主动断开监听
 }
 
 func (s *stream) Interrupt() {
 	s.close.Do(func() {
+		// 向灵矽 AI 下发 abort 终止指令
+		abortMsg := map[string]interface{}{
+			"session_id": s.provider.sessionID,
+			"type":       "abort",
+		}
+		_ = s.provider.writeJSON(abortMsg)
+
 		close(s.cancel)
 		s.provider.mu.Lock()
 		if s.provider.stream == s {

@@ -38,6 +38,7 @@ func newStream(turnID string) *stream {
 }
 
 func (s *stream) SendAudio(_ []byte) error      { return nil }
+func (s *stream) SendText(_ string) error       { return nil }
 func (s *stream) Events() <-chan provider.Event { return s.events }
 func (s *stream) Interrupt()                    { s.close.Do(func() { close(s.cancel) }) }
 func (s *stream) Close()                        { s.Interrupt() }

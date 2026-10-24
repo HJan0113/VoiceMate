@@ -18,8 +18,8 @@ type PlatformLayoutProps = {
   assistantText?: string;
   onSessionAction: () => void;
   onEndSession: () => void;
-  onInputAction: () => void;
   onToggleMute: () => void;
+  onSendText?: (text: string) => void;
 };
 
 export function PlatformLayout({
@@ -34,8 +34,8 @@ export function PlatformLayout({
   assistantText,
   onSessionAction,
   onEndSession,
-  onInputAction,
   onToggleMute,
+  onSendText,
 }: PlatformLayoutProps) {
   return (
     <main className="shell">
@@ -45,6 +45,7 @@ export function PlatformLayout({
           state={state}
           emotion={emotion}
           assistantText={assistantText}
+          onSendText={onSendText}
         />
         <section className="console" aria-label="会话控制区">
           <div className="console-heading">
@@ -52,13 +53,13 @@ export function PlatformLayout({
               <p className="section-kicker">SESSION CONSOLE</p>
               <h1>实时会话</h1>
             </div>
-            <span className="console-version">灵矽AI 伴侣</span>
+            <span className="console-version">灵矽AI · 实时通话</span>
           </div>
           <SessionInfo state={state} sessionId={sessionId} />
           <ErrorNotice message={error} />
           <TranscriptPanel
             lines={lines}
-            emptyMessage="建立会话后，文本记录会显示在这里。"
+            emptyMessage="接通电话后，双方的语音与对话记录将实时呈现在这里。"
           />
           <ControlPanel
             state={state}
@@ -67,14 +68,14 @@ export function PlatformLayout({
             muted={muted}
             onSessionAction={onSessionAction}
             onEndSession={onEndSession}
-            onInputAction={onInputAction}
             onToggleMute={onToggleMute}
+            onSendText={onSendText}
           />
         </section>
       </section>
       <footer>
         <span>VoiceMate 灵矽AI 伴侣系统</span>
-        <span>HTTP / WebSocket · Qiniu Linx AI</span>
+        <span>全双工实时通话 · Qiniu Linx AI</span>
       </footer>
     </main>
   );

@@ -17,6 +17,7 @@ type Event struct {
 
 type Stream interface {
 	SendAudio([]byte) error
+	SendText(string) error
 	Stop()
 	Interrupt()
 	Events() <-chan Event

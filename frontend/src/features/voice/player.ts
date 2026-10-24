@@ -1,10 +1,12 @@
 export class PcmStreamPlayer {
   private audioCtx: AudioContext | null = null;
   private scheduledTime = 0;
-  private isPlaying = false;
   private muted = false;
+  private readonly sampleRate: number;
 
-  constructor(private readonly sampleRate = 16000) {}
+  constructor(sampleRate = 16000) {
+    this.sampleRate = sampleRate;
+  }
 
   setMuted(muted: boolean): void {
     this.muted = muted;
@@ -54,22 +56,11 @@ export class PcmStreamPlayer {
     const startTime = Math.max(now, this.scheduledTime);
     source.start(startTime);
     this.scheduledTime = startTime + audioBuffer.duration;
-    this.isPlaying = true;
-
-    source.onended = () => {
-      if (
-        this.audioCtx &&
-        this.audioCtx.currentTime >= this.scheduledTime - 0.05
-      ) {
-        this.isPlaying = false;
-      }
-    };
   }
 
   stop(): void {
     if (this.audioCtx) {
       this.scheduledTime = this.audioCtx.currentTime;
-      this.isPlaying = false;
     }
   }
 

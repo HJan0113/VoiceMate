@@ -78,6 +78,9 @@ export class RealtimeClient {
   interrupt(): void {
     this.send({ type: "turn.interrupt" });
   }
+  sendText(text: string): void {
+    this.send({ type: "chat.text", text });
+  }
 
   sendAudio(payload: ArrayBuffer): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;

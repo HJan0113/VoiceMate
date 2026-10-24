@@ -5,6 +5,7 @@ type FurinaCompanionProps = {
   state: ConnectionState;
   emotion?: string;
   assistantText?: string;
+  onSendText?: (text: string) => void;
 };
 
 const EMOTION_MAP: Record<string, string> = {
@@ -20,12 +21,11 @@ export function FurinaCompanion({
   state,
   emotion,
   assistantText,
+  onSendText,
 }: FurinaCompanionProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [bubbleText, setBubbleText] = useState(
-    "「欧庇克莱大剧院的帷幕永不落空，而你，就是本名伶最忠实的特约观众~」",
-  );
-  const [currentEmotion, setCurrentEmotion] = useState("✨ 枫丹名伶");
+  const [touchText, setTouchText] = useState("");
+  const [touchEmotion, setTouchEmotion] = useState("");
   const [pipActive, setPipActive] = useState(false);
 
   // 根据当前会话状态调节视频倍速
@@ -38,30 +38,43 @@ export function FurinaCompanion({
     }
   }, [state]);
 
-  // 更新情绪角标
-  useEffect(() => {
-    if (state === "listening") {
-      setCurrentEmotion("🎙️ 正在倾听");
-    } else if (state === "processing") {
-      setCurrentEmotion("🤔 正在理解");
-    } else if (emotion) {
-      setCurrentEmotion(EMOTION_MAP[emotion] || `✨ ${emotion}`);
-    } else if (state === "speaking") {
-      setCurrentEmotion("💬 正在表达");
-    } else {
-      setCurrentEmotion("🎭 枫丹名伶");
-    }
-  }, [state, emotion]);
+  // 计算当前展示的气泡台词
+  let bubbleText =
+    "「欧庇克莱大剧院的帷幕永不落空，而你，就是本名伶最忠实的特约观众~」";
+  if (assistantText) {
+    bubbleText = `「${assistantText}」`;
+  } else if (touchText) {
+    bubbleText = touchText;
+  }
 
-  // 当有最新回复文字时更新气泡
-  useEffect(() => {
-    if (assistantText) {
-      setBubbleText(`「${assistantText}」`);
-    }
-  }, [assistantText]);
+  // 计算当前情绪角标
+  let currentEmotion = "🎭 枫丹名伶";
+  if (touchEmotion && !assistantText) {
+    currentEmotion = touchEmotion;
+  } else if (state === "calling" || state === "listening") {
+    currentEmotion = "🎙️ 倾听中";
+  } else if (state === "speaking") {
+    currentEmotion = emotion
+      ? EMOTION_MAP[emotion] || `💬 ${emotion}`
+      : "💬 正在表达";
+  } else if (emotion) {
+    currentEmotion = EMOTION_MAP[emotion] || `✨ ${emotion}`;
+  }
 
   // 交互彩蛋触发
   const triggerInteract = async (part: "head" | "body") => {
+    const isCalling =
+      state === "calling" || state === "speaking" || state === "listening";
+    if (isCalling && onSendText) {
+      const prompt =
+        part === "head"
+          ? "（观众轻摸了你的礼帽，称赞你很有魅力）"
+          : "（观众轻戳了你的身躯，向你打招呼）";
+      onSendText(prompt);
+      setTouchEmotion(part === "head" ? "🥰 备受宠溺" : "😳 轻微炸毛");
+      return;
+    }
+
     try {
       const res = await fetch("/api/v1/characters/furina/interact", {
         method: "POST",
@@ -74,22 +87,22 @@ export function FurinaCompanion({
           data?: { text: string; emotion: string };
         };
         if (data.data?.text) {
-          setBubbleText(data.data.text);
-          setCurrentEmotion(part === "head" ? "🥰 备受宠溺" : "😳 轻微炸毛");
+          setTouchText(data.data.text);
+          setTouchEmotion(part === "head" ? "🥰 备受宠溺" : "😳 轻微炸毛");
         }
       }
     } catch {
       // 离线备用彩蛋
       if (part === "head") {
-        setBubbleText(
+        setTouchText(
           "「哼哼，怎么了？是折服于本水神的魅力，忍不住想要摸摸我的礼帽了吗？」",
         );
-        setCurrentEmotion("🥰 备受宠溺");
+        setTouchEmotion("🥰 备受宠溺");
       } else {
-        setBubbleText(
+        setTouchText(
           "「喂喂！注意你的举止，凡人！这可是枫丹最顶级的正装，弄皱了你可赔不起！」",
         );
-        setCurrentEmotion("😳 轻微炸毛");
+        setTouchEmotion("😳 轻微炸毛");
       }
     }
   };
