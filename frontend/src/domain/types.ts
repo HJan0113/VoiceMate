@@ -6,6 +6,22 @@ export type Character = {
   emotionProfiles: Record<string, { video: string; playbackRate: number }>;
 };
 
+export type ConnectionState =
+  | "idle"
+  | "connecting"
+  | "ready"
+  | "listening"
+  | "processing"
+  | "speaking"
+  | "error";
+
+export type ChatLine = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  turnId?: string;
+};
+
 export type Session = {
   sessionId: string;
   conversationId: string;
