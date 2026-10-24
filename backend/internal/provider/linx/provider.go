@@ -190,15 +190,19 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 
 func (p *Provider) readLoop(conn *websocket.Conn) {
 	defer func() {
+		var activeStream *stream
 		p.mu.Lock()
 		if p.conn == conn {
 			p.conn = nil
-			if p.stream != nil {
-				p.stream.Close()
-			}
+			activeStream = p.stream
+			p.stream = nil
 		}
 		p.mu.Unlock()
 		_ = conn.Close()
+
+		if activeStream != nil {
+			activeStream.Close()
+		}
 	}()
 
 	for {
