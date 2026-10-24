@@ -17,11 +17,27 @@ export function FurinaCompanion({
   const happyVideoRef = useRef<HTMLVideoElement>(null);
   const [pipActive, setPipActive] = useState(false);
 
-  const isHappy =
-    emotion === "happy" ||
-    emotion === "开心" ||
-    emotion === "laughing" ||
-    emotion === "loving";
+  const isHappy = emotion
+    ? [
+        "happy",
+        "loving",
+        "laughing",
+        "funny",
+        "winking",
+        "relaxed",
+        "delicious",
+        "kissy",
+        "confident",
+        "silly",
+        "cool",
+        "smile",
+        "开心",
+        "高兴",
+        "快乐",
+        "喜欢",
+        "得意",
+      ].includes(emotion.toLowerCase())
+    : false;
 
   // 根据当前会话状态调节视频倍速
   useEffect(() => {

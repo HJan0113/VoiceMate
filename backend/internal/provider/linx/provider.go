@@ -506,16 +506,46 @@ type mcpToolCallParams struct {
 	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
+// happySimilarEmotions 包含所有类似开心的情绪类型（涵盖灵矽AI常用emoji列表中的类似开心分类）
+var happySimilarEmotions = map[string]bool{
+	"happy":     true, // 🙂 happy 开心
+	"loving":    true, // 😍 loving 喜爱/宠溺
+	"laughing":  true, // 😆 laughing 欢笑
+	"funny":     true, // 😂 funny 搞笑逗趣
+	"winking":   true, // 😉 winking 俏皮眨眼
+	"relaxed":   true, // 😌 relaxed 放松从容
+	"delicious": true, // 🤤 delicious 垂涎喜悦
+	"kissy":     true, // 😘 kissy 亲吻喜爱
+	"confident": true, // 😏 confident 得意自信
+	"silly":     true, // 😜 silly 调皮搞怪
+	"cool":      true, // 😎 cool 帅气得意
+	"smile":     true, // 微笑
+	"开心":        true,
+	"高兴":        true,
+	"快乐":        true,
+	"喜欢":        true,
+	"得意":        true,
+}
+
+// happySimilarEmojis 包含常用emoji列表及文本关键词中所有类似开心的视觉表情
+var happySimilarEmojis = []string{
+	"🙂", "😍", "😆", "😂", "😉", "😌", "🤤", "😘", "😏", "😜", "😎",
+	"😊", "🥰", "😄", "😁", "😀", "🥳", "✨",
+	"开心", "高兴", "快乐", "愉快", "嘻嘻", "哈哈", "微笑",
+}
+
 func parseEmotion(emotion, text, action string) string {
 	raw := strings.ToLower(strings.TrimSpace(emotion))
-	if raw == "happy" || raw == "laughing" || raw == "loving" || raw == "smile" || raw == "开心" {
+	if happySimilarEmotions[raw] {
 		return "happy"
 	}
 	act := strings.ToLower(strings.TrimSpace(action))
-	if strings.Contains(act, "happy") || strings.Contains(act, "smile") || strings.Contains(act, "laugh") {
-		return "happy"
+	for k := range happySimilarEmotions {
+		if strings.Contains(act, k) {
+			return "happy"
+		}
 	}
-	for _, kw := range []string{"🙂", "😆", "😍", "😊", "🥰", "😄", "😁", "😀", "开心", "高兴", "快乐", "愉快"} {
+	for _, kw := range happySimilarEmojis {
 		if strings.Contains(text, kw) {
 			return "happy"
 		}
@@ -531,14 +561,24 @@ func isHappyTrigger(toolName string, args map[string]any) bool {
 		for _, k := range []string{"emotion", "animation", "action", "name", "state"} {
 			if v, ok := args[k]; ok {
 				s := strings.ToLower(fmt.Sprintf("%v", v))
-				if strings.Contains(s, "happy") || strings.Contains(s, "开心") || strings.Contains(s, "smile") || strings.Contains(s, "笑") {
+				if happySimilarEmotions[s] {
 					return true
+				}
+				for _, kw := range happySimilarEmojis {
+					if strings.Contains(s, kw) {
+						return true
+					}
 				}
 			}
 		}
 	}
 	lowerName := strings.ToLower(toolName)
-	return strings.Contains(lowerName, "happy") || strings.Contains(lowerName, "smile")
+	for k := range happySimilarEmotions {
+		if strings.Contains(lowerName, k) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Provider) handleMCPMessage(msg []byte, active *stream) {

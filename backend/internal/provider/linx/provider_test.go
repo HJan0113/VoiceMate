@@ -138,15 +138,50 @@ func TestParseEmotion(t *testing.T) {
 		action   string
 		expected string
 	}{
+		// 类似开心的情绪类型，全部归类为 happy
 		{emotion: "happy", text: "", action: "", expected: "happy"},
-		{emotion: "laughing", text: "", action: "", expected: "happy"},
 		{emotion: "loving", text: "", action: "", expected: "happy"},
+		{emotion: "laughing", text: "", action: "", expected: "happy"},
+		{emotion: "funny", text: "", action: "", expected: "happy"},
+		{emotion: "winking", text: "", action: "", expected: "happy"},
+		{emotion: "relaxed", text: "", action: "", expected: "happy"},
+		{emotion: "delicious", text: "", action: "", expected: "happy"},
+		{emotion: "kissy", text: "", action: "", expected: "happy"},
+		{emotion: "confident", text: "", action: "", expected: "happy"},
+		{emotion: "silly", text: "", action: "", expected: "happy"},
+		{emotion: "cool", text: "", action: "", expected: "happy"},
 		{emotion: "开心", text: "", action: "", expected: "happy"},
+		{emotion: "高兴", text: "", action: "", expected: "happy"},
+
+		// 类似开心的常用 emoji 识别
 		{emotion: "", text: "🙂", action: "", expected: "happy"},
-		{emotion: "", text: "芙宁娜大人真开心", action: "", expected: "happy"},
-		{emotion: "", text: "", action: "happy_dance", expected: "happy"},
+		{emotion: "", text: "😍", action: "", expected: "happy"},
+		{emotion: "", text: "😆", action: "", expected: "happy"},
+		{emotion: "", text: "😂", action: "", expected: "happy"},
+		{emotion: "", text: "😉", action: "", expected: "happy"},
+		{emotion: "", text: "😌", action: "", expected: "happy"},
+		{emotion: "", text: "🤤", action: "", expected: "happy"},
+		{emotion: "", text: "😘", action: "", expected: "happy"},
+		{emotion: "", text: "😏", action: "", expected: "happy"},
+		{emotion: "", text: "😜", action: "", expected: "happy"},
+		{emotion: "", text: "😎", action: "", expected: "happy"},
+		{emotion: "", text: "今天真是太开心了", action: "", expected: "happy"},
+
+		// 动作表情 action 触发
+		{emotion: "", text: "", action: "winking_eye", expected: "happy"},
+		{emotion: "", text: "", action: "happy_smile", expected: "happy"},
+
+		// 非开心类型表情，保持各自原状态
+		{emotion: "neutral", text: "", action: "", expected: "neutral"},
 		{emotion: "thinking", text: "", action: "", expected: "thinking"},
-		{emotion: "proud", text: "", action: "", expected: "proud"},
+		{emotion: "sad", text: "", action: "", expected: "sad"},
+		{emotion: "angry", text: "", action: "", expected: "angry"},
+		{emotion: "embarrassed", text: "", action: "", expected: "embarrassed"},
+		{emotion: "surprised", text: "", action: "", expected: "surprised"},
+		{emotion: "shocked", text: "", action: "", expected: "shocked"},
+		{emotion: "crying", text: "", action: "", expected: "crying"},
+		{emotion: "sleepy", text: "", action: "", expected: "sleepy"},
+		{emotion: "confused", text: "", action: "", expected: "confused"},
 		{emotion: "", text: "", action: "", expected: "idle"},
 	}
 

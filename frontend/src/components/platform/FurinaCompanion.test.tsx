@@ -50,4 +50,26 @@ describe("FurinaCompanion", () => {
     expect(happyVideo.className).toContain("furina-video-active");
     expect(idleVideo.className).toContain("furina-video-hidden");
   });
+
+  it.each([
+    "loving",
+    "laughing",
+    "funny",
+    "winking",
+    "relaxed",
+    "delicious",
+    "kissy",
+    "confident",
+    "silly",
+    "cool",
+  ])("switches to happy video when emotion is '%s'", (simulatedEmotion) => {
+    render(<FurinaCompanion state="ready" emotion={simulatedEmotion} />);
+
+    const idleVideo = screen.getByTestId("furina-video-idle");
+    const happyVideo = screen.getByTestId("furina-video-happy");
+
+    expect(happyVideo.className).toContain("furina-video-active");
+    expect(idleVideo.className).toContain("furina-video-hidden");
+    expect(screen.getByTestId("furina-happy-badge")).not.toBeNull();
+  });
 });
