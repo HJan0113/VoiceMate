@@ -19,11 +19,11 @@ export async function getCharacters(): Promise<Character[]> {
   return (await request<{ data: Character[] }>("/api/v1/characters")).data;
 }
 
-export async function createSession(characterId?: string): Promise<Session> {
+export async function createSession(characterId: string): Promise<Session> {
   await request("/api/v1/auth/anonymous", { method: "POST", body: "{}" });
   const session = await request<Session>("/api/v1/realtime/sessions", {
     method: "POST",
-    body: JSON.stringify(characterId ? { characterId } : {}),
+    body: JSON.stringify({ characterId }),
   });
   return { ...session, wsUrl: new URL(session.wsUrl, API_BASE).toString() };
 }

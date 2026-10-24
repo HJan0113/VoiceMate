@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  ChatLine,
-  ConnectionState,
-  ServerEvent,
-  Session,
-} from "./domain/types";
-import { PlatformLayout } from "./components/platform/PlatformLayout";
+import type { Character, ServerEvent } from "./domain/types";
 import { MicrophoneCapture } from "./features/voice/capture";
-import { createSession } from "./services/api";
+import { createSession, getCharacters } from "./services/api";
 import { RealtimeClient } from "./services/realtime";
 import "./App.css";
 
+type ChatLine = { role: "user" | "assistant"; text: string; turnId?: string };
+
 function App() {
-  const [state, setState] = useState<ConnectionState>("idle");
-  const [notice, setNotice] = useState("准备建立实时会话");
-  const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [character, setCharacter] = useState<Character | null>(null);
+  const [connection, setConnection] = useState<
+    "idle" | "connecting" | "ready" | "listening" | "speaking" | "error"
+  >("idle");
+  const [emotion, setEmotion] = useState("calm");
+  const [notice, setNotice] = useState("正在加载角色配置…");
   const [lines, setLines] = useState<ChatLine[]>([]);
   const client = useMemo(() => new RealtimeClient(), []);
   const microphone = useMemo(() => new MicrophoneCapture(), []);
@@ -24,9 +22,18 @@ function App() {
   const turnActive = useRef(false);
 
   useEffect(() => {
+    async function loadCharacters() {
+      try {
+        const items = await getCharacters();
+        setCharacter(items[0] ?? null);
+        setNotice("准备好和你聊天了");
+      } catch {
+        setNotice("API 未启动，请先运行 pnpm dev:backend");
+      }
+    }
+
+    void loadCharacters();
     return () => {
-      pressing.current = false;
-      turnActive.current = false;
       microphone.stop();
       client.close();
     };
@@ -36,28 +43,20 @@ function App() {
     () =>
       client.on((event: ServerEvent) => {
         if (event.type === "session.ready") {
-          setState("ready");
-          setError(null);
-          setNotice("连接已建立，按住按钮开始输入");
+          setConnection("ready");
+          setNotice("连接已建立，按住按钮开始说话");
         }
         if (event.type === "turn.started" && pressing.current) {
-          setState("listening");
-          setNotice("正在接收输入…");
+          setConnection("listening");
+          setNotice("正在聆听…");
         }
-        if (event.type === "transcript.final" && event.text) {
+        if (event.type === "transcript.final" && event.text)
           setLines((current) => [
             ...current,
-            {
-              id: `${event.turnId ?? turnId.current}-user`,
-              role: "user",
-              text: event.text!,
-              turnId: event.turnId,
-            },
+            { role: "user", text: event.text!, turnId: event.turnId },
           ]);
-          setState("processing");
-        }
         if (event.type === "response.delta" && event.text) {
-          setState("speaking");
+          setConnection("speaking");
           setLines((current) => {
             const targetTurnId = event.turnId ?? turnId.current;
             const last = current.at(-1);
@@ -69,100 +68,188 @@ function App() {
             }
             return [
               ...current,
-              {
-                id: `${targetTurnId}-assistant`,
-                role: "assistant",
-                text: event.text!,
-                turnId: targetTurnId,
-              },
+              { role: "assistant", text: event.text!, turnId: targetTurnId },
             ];
           });
         }
+        if (event.type === "emotion.changed" && event.emotion)
+          setEmotion(event.emotion);
         if (event.type === "turn.completed" || event.type === "audio.end") {
-          turnActive.current = false;
-          setState("ready");
-          setNotice("本轮完成，可以继续输入");
+          setConnection("ready");
+          setNotice("轮次完成，继续聊聊吧");
         }
         if (event.type === "connection.closed") {
           pressing.current = false;
           turnActive.current = false;
           microphone.stop();
-          setState("error");
-          setError("实时连接已断开，请重试");
-          setNotice("连接异常");
+          setConnection("error");
+          setNotice("实时连接已断开，请重试");
         }
         if (event.type === "error") {
           pressing.current = false;
           turnActive.current = false;
           microphone.stop();
-          setState("error");
-          setError("实时服务返回错误，请重试");
-          setNotice("连接异常");
+          setConnection("error");
+          setNotice("实时服务返回错误，请重试");
         }
       }),
     [client, microphone],
   );
 
   async function begin() {
-    if (state === "connecting") return;
-    setError(null);
-    if (state === "idle" || state === "error") {
-      setState("connecting");
-      setNotice("正在建立实时会话…");
+    if (!character || connection === "connecting") return;
+    if (connection === "idle" || connection === "error") {
+      setConnection("connecting");
+      setNotice("正在建立安全连接…");
       try {
-        const nextSession = await createSession();
-        setSession(nextSession);
-        await client.connect(nextSession.wsUrl, nextSession.ephemeralToken);
+        const session = await createSession(character.id);
+        await client.connect(session.wsUrl, session.ephemeralToken);
         return;
       } catch {
-        setState("error");
-        setError("连接失败，请确认服务已启动后重试");
-        setNotice("无法建立会话");
+        setConnection("error");
+        setNotice("连接失败，请确认 pnpm dev:backend 已启动");
         return;
       }
     }
     pressing.current = true;
     turnActive.current = true;
     turnId.current = `turn_${crypto.randomUUID()}`;
-    setState("listening");
-    setNotice("正在接收输入…");
+    setConnection("listening");
+    setNotice("正在聆听…");
     client.startTurn(turnId.current);
     try {
       await microphone.start((frame) => {
         if (pressing.current) client.sendAudio(frame);
       });
+      if (!pressing.current) {
+        microphone.stop();
+      }
     } catch {
       if (pressing.current) {
-        setError("无法访问麦克风，请检查浏览器权限");
-        setNotice("麦克风不可用");
+        setNotice("无法访问麦克风，仍可用演示回路继续测试");
       }
     }
   }
 
   function end() {
-    if (!pressing.current && !turnActive.current) return;
+    if (
+      !pressing.current &&
+      !turnActive.current &&
+      connection !== "listening"
+    ) {
+      return;
+    }
     pressing.current = false;
     turnActive.current = false;
     microphone.stop();
     client.stopTurn();
-    if (state === "listening") {
-      setState("processing");
-      setNotice("正在处理输入…");
+    if (connection === "listening") {
+      setConnection("ready");
     }
   }
 
+  const statusLabel = {
+    idle: "未连接",
+    connecting: "连接中",
+    ready: "在线",
+    listening: "聆听中",
+    speaking: "回应中",
+    error: "连接异常",
+  }[connection];
+  const video = character?.emotionProfiles[emotion]?.video;
+  const talkLabel = connection === "listening" ? "松开结束" : "连接并开始";
+
   return (
-    <PlatformLayout
-      state={state}
-      notice={notice}
-      error={error}
-      sessionId={session?.sessionId}
-      lines={lines}
-      disabled={state === "connecting"}
-      onPointerDown={() => void begin()}
-      onPointerUp={end}
-      onPointerLeave={end}
-    />
+    <main className="shell">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark">◌</span>
+          <span>VOICEMATE</span>
+        </div>
+        <span className="protocol">REALTIME / v1</span>
+        <div className="status">
+          <i className={`status-dot ${connection}`} />
+          {statusLabel}
+        </div>
+      </header>
+      <section className="hero-grid">
+        <div className="intro">
+          <p className="eyebrow">A COMPANION THAT LISTENS</p>
+          <h1>
+            让声音成为
+            <br />
+            <em>陪伴的入口。</em>
+          </h1>
+          <p className="lead">
+            连接语音、情绪与角色，让每一次对话都留下有温度的回应。
+          </p>
+          <div className="capabilities">
+            <span>16 kHz PCM</span>
+            <span>LOW LATENCY</span>
+            <span>EMOTION SYNC</span>
+          </div>
+        </div>
+        <div className="companion-card">
+          <div className="card-glow" />
+          <div className="character-stage">
+            <div className="orbit orbit-one" />
+            <div className="orbit orbit-two" />
+            <div className="character-placeholder">
+              <span className="character-sigil">
+                {character?.displayName.slice(0, 1) ?? "V"}
+              </span>
+              <span className="character-name">
+                {character?.displayName ?? "VoiceMate"}
+              </span>
+              {video && <span className="video-hint">{video}</span>}
+            </div>
+            <div className="emotion-pill">
+              <span className="pulse" />
+              {emotion.toUpperCase()}
+            </div>
+          </div>
+          <div className="conversation">
+            <div className="conversation-label">LIVE TRANSCRIPT</div>
+            {lines.length ? (
+              lines.slice(-2).map((line) => (
+                <p
+                  className={`line ${line.role}`}
+                  key={`${line.role}-${line.text}`}
+                >
+                  <b>{line.role === "user" ? "YOU" : "MATE"}</b>
+                  {line.text}
+                </p>
+              ))
+            ) : (
+              <p className="empty-line">{notice}</p>
+            )}
+          </div>
+        </div>
+      </section>
+      <section className="control-panel">
+        <div>
+          <p className="panel-label">VOICE SESSION</p>
+          <h2>{notice}</h2>
+        </div>
+        <button
+          type="button"
+          className={`talk-button ${connection === "listening" ? "active" : ""}`}
+          onPointerDown={begin}
+          onPointerUp={end}
+          onPointerLeave={end}
+          disabled={!character || connection === "connecting"}
+        >
+          <span className="mic-ring">
+            {connection === "listening" ? "■" : "◉"}
+          </span>
+          <span>{connection === "ready" ? "按住说话" : talkLabel}</span>
+        </button>
+      </section>
+      <footer>
+        <span>FakeProvider 已启用 · 可替换为七牛灵矽 AI</span>
+        <span>API / WS bridge scaffold</span>
+      </footer>
+    </main>
   );
 }
 
