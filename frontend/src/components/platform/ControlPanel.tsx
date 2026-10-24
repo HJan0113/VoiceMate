@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Mic, PhoneOff, Power, Volume2, VolumeX } from "lucide-react";
 import type { ConnectionState } from "../../domain/types";
 
 type ControlPanelProps = {
@@ -42,9 +43,7 @@ export function ControlPanel({
   onInputAction,
   onStartVoice,
   onStopVoice,
-  onSendText,
 }: ControlPanelProps) {
-  const [chatText, setChatText] = useState("");
   const [isPressing, setIsPressing] = useState(false);
 
   const isConnected =
@@ -118,22 +117,9 @@ export function ControlPanel({
     }
   };
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = chatText.trim();
-    if (!text || !onSendText) return;
-    onSendText(text);
-    setChatText("");
-  };
-
   return (
-    <section className="control-panel" aria-label="操作区">
-      <div className="call-status-header">
-        <p className="panel-label">VOICE CONTROL</p>
-        <h2>{notice}</h2>
-      </div>
-
-      <div className="control-actions">
+    <section className="control-panel" aria-label="操作区" title={notice}>
+      <div className="control-dock">
         {!isConnected ? (
           <button
             type="button"
@@ -142,13 +128,29 @@ export function ControlPanel({
             disabled={disabled}
             aria-label={sessionLabel}
           >
-            <span className="call-icon" aria-hidden="true">
-              ⚡
-            </span>
+            <Power className="dock-icon" aria-hidden="true" />
             <span>{sessionLabel}</span>
           </button>
         ) : (
-          <div className="push-to-talk-wrapper">
+          <div className="dock-connected-row">
+            <button
+              type="button"
+              className={`dock-side-btn ${muted ? "muted" : ""}`}
+              onClick={onToggleMute}
+              aria-pressed={muted}
+              aria-label={muted ? "取消静音" : "静音"}
+              title={muted ? "取消静音" : "静音"}
+            >
+              {muted ? (
+                <VolumeX className="dock-icon" aria-hidden="true" />
+              ) : (
+                <Volume2 className="dock-icon" aria-hidden="true" />
+              )}
+              <span className="dock-side-label">
+                {muted ? "取消静音" : "静音"}
+              </span>
+            </button>
+
             <button
               type="button"
               className={`ptt-button ${isRecording ? "recording" : ""}`}
@@ -161,52 +163,25 @@ export function ControlPanel({
               disabled={disabled || state === "speaking"}
               aria-label={isRecording ? "松开发送" : "开始输入"}
             >
-              <span className="ptt-icon">{isRecording ? "🔴" : "🎙️"}</span>
+              <Mic className="ptt-icon" aria-hidden="true" />
               <span className="ptt-text">
                 {getPttButtonText(state, isRecording)}
               </span>
             </button>
 
-            <div className="ptt-sub-bar">
-              <button
-                type="button"
-                className={`ptt-sub-btn ${muted ? "muted" : ""}`}
-                onClick={onToggleMute}
-                aria-pressed={muted}
-              >
-                <span>{muted ? "取消静音" : "静音"}</span>
-              </button>
-              <button
-                type="button"
-                className="ptt-sub-btn hangup"
-                onClick={onEndSession}
-              >
-                <span>结束会话</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className="dock-side-btn hangup"
+              onClick={onEndSession}
+              aria-label="结束会话"
+              title="结束会话"
+            >
+              <PhoneOff className="dock-icon" aria-hidden="true" />
+              <span className="dock-side-label">结束会话</span>
+            </button>
           </div>
         )}
       </div>
-
-      {/* 文本发送栏 */}
-      {isConnected && (
-        <form className="call-chat-bar" onSubmit={handleSend}>
-          <input
-            type="text"
-            className="call-chat-input"
-            placeholder="也可打字对芙宁娜说点什么... (Enter 发送)"
-            value={chatText}
-            onChange={(e) => setChatText(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="call-chat-send"
-            disabled={!chatText.trim()}
-          >
-            发送
-          </button>
-        </form>
-      )}
     </section>
   );
 }

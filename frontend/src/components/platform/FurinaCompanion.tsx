@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { PictureInPicture2 } from "lucide-react";
 import type { ConnectionState } from "../../domain/types";
 
 type FurinaCompanionProps = {
   state: ConnectionState;
   emotion?: string;
   assistantText?: string;
+  notice?: string;
   onSendText?: (text: string) => void;
 };
 
@@ -12,6 +14,7 @@ export function FurinaCompanion({
   state,
   emotion,
   assistantText,
+  notice,
 }: FurinaCompanionProps) {
   const idleVideoRef = useRef<HTMLVideoElement>(null);
   const happyVideoRef = useRef<HTMLVideoElement>(null);
@@ -89,31 +92,6 @@ export function FurinaCompanion({
 
   return (
     <section className="furina-companion-container" aria-label="伴侣展示区">
-      <div className="furina-header">
-        <div>
-          <span className="furina-kicker">COMPANION AVATAR</span>
-          <h2 className="furina-name">芙宁娜 (Furina)</h2>
-        </div>
-        <div className="furina-badge-group">
-          {isHappy && (
-            <span
-              className="furina-emotion-tag happy"
-              data-testid="furina-happy-badge"
-            >
-              ✨ 开心
-            </span>
-          )}
-          <button
-            type="button"
-            className="pip-button"
-            onClick={() => void togglePip()}
-            title={pipActive ? "退出画中画" : "开启悬浮画中画"}
-          >
-            {pipActive ? "✕ 退出悬浮" : "⧉ 画中画"}
-          </button>
-        </div>
-      </div>
-
       <div className="furina-stage">
         {/* 默认站立待机动画 */}
         <video
@@ -141,9 +119,40 @@ export function FurinaCompanion({
           data-testid="furina-video-happy"
         />
 
-        {/* 动态台词气泡 */}
-        <div className="furina-bubble">
-          <p className="bubble-content">{bubbleText}</p>
+        {/* 右上侧悬浮状态标签与画中画按钮 */}
+        <div className="furina-floating-corner">
+          {isHappy && (
+            <span
+              className="furina-emotion-tag happy"
+              data-testid="furina-happy-badge"
+            >
+              ✨ 开心
+            </span>
+          )}
+          <button
+            type="button"
+            className={`hud-btn pip-floating-btn ${pipActive ? "active" : ""}`}
+            onClick={() => void togglePip()}
+            title={pipActive ? "退出画中画" : "开启悬浮画中画"}
+            aria-label={pipActive ? "退出悬浮" : "画中画"}
+          >
+            <PictureInPicture2 className="hud-icon" />
+            <span className="hud-btn-label">
+              {pipActive ? "退出悬浮" : "画中画"}
+            </span>
+          </button>
+        </div>
+
+        {/* 动态台词与状态气泡 */}
+        <div className="furina-overlay-bottom">
+          <div className="furina-bubble">
+            <p className="bubble-content">{bubbleText}</p>
+          </div>
+          {notice && (
+            <p className="hud-notice-pill" aria-live="polite">
+              {notice}
+            </p>
+          )}
         </div>
       </div>
     </section>
