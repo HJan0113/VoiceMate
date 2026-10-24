@@ -85,7 +85,7 @@ func (p *Provider) getLinxToken() (string, string, error) {
 		return "", "", err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.cfg.OTAGateway, bytes.NewBuffer(bodyBytes)) //nolint:gosec // gateway URL is provided via configuration
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.cfg.OTAGateway, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return "", "", err
 	}
@@ -137,7 +137,7 @@ func (p *Provider) connectLocked(ctx context.Context) error {
 	header.Set("Protocol-Version", "1")
 
 	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.DialContext(ctx, wsURL, header) //nolint:gosec // websocket URL is provided by OTA gateway
+	conn, resp, err := dialer.DialContext(ctx, wsURL, header)
 	if resp != nil && resp.Body != nil {
 		defer func() { _ = resp.Body.Close() }()
 	}
