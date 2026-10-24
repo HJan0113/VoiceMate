@@ -35,50 +35,39 @@ export function PlatformLayout({
   return (
     <main className="shell">
       <TopBar state={state} />
-      <section className="hero-grid">
-        <div className="intro">
-          <p className="eyebrow">REALTIME PLATFORM</p>
-          <h1>
-            让声音成为
-            <br />
-            <em>交流的入口。</em>
-          </h1>
-          <p className="lead">提供可运行、可扩展、可测试的实时会话基础能力。</p>
-          <div className="capabilities" aria-label="平台能力">
-            <span>SESSION</span>
-            <span>TEXT LOG</span>
-            <span>REALTIME</span>
+      <section className="workspace" aria-label="实时会话工作区">
+        <section className="visual-placeholder" aria-label="人物形象占位区">
+          <div className="wireframe-title">人物形象区域</div>
+          <div className="wireframe-box">
+            <span>待接入人物形象</span>
           </div>
-        </div>
-        <div className="companion-card">
-          <div className="card-glow" />
-          <div className="character-stage platform-stage">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="platform-mark" aria-hidden="true">
-              <span className="platform-sigil">V</span>
-              <span className="platform-name">VOICE PLATFORM</span>
+        </section>
+        <section className="console" aria-label="会话控制区">
+          <div className="console-heading">
+            <div>
+              <p className="section-kicker">SESSION CONSOLE</p>
+              <h1>实时会话</h1>
             </div>
-            <div className="stage-state">{state.toUpperCase()}</div>
+            <span className="console-version">基础平台</span>
           </div>
+          <SessionInfo state={state} sessionId={sessionId} />
+          <ErrorNotice message={error} />
           <TranscriptPanel
             lines={lines}
             emptyMessage="建立会话后，文本记录会显示在这里。"
           />
-        </div>
+          <ControlPanel
+            state={state}
+            notice={notice}
+            disabled={disabled}
+            muted={muted}
+            onSessionAction={onSessionAction}
+            onEndSession={onEndSession}
+            onInputAction={onInputAction}
+            onToggleMute={onToggleMute}
+          />
+        </section>
       </section>
-      <ErrorNotice message={error} />
-      <SessionInfo state={state} sessionId={sessionId} />
-      <ControlPanel
-        state={state}
-        notice={notice}
-        disabled={disabled}
-        muted={muted}
-        onSessionAction={onSessionAction}
-        onEndSession={onEndSession}
-        onInputAction={onInputAction}
-        onToggleMute={onToggleMute}
-      />
       <footer>
         <span>通用实时会话底座</span>
         <span>HTTP / WebSocket</span>
