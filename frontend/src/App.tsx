@@ -30,11 +30,19 @@ function App() {
   const isRecordingRef = useRef(false);
   const mutedRef = useRef(false);
   const processingTimerRef = useRef<number | null>(null);
+  const emotionResetTimerRef = useRef<number | null>(null);
 
   const clearProcessingTimer = useCallback(() => {
     if (processingTimerRef.current !== null) {
       window.clearTimeout(processingTimerRef.current);
       processingTimerRef.current = null;
+    }
+  }, []);
+
+  const clearEmotionResetTimer = useCallback(() => {
+    if (emotionResetTimerRef.current !== null) {
+      window.clearTimeout(emotionResetTimerRef.current);
+      emotionResetTimerRef.current = null;
     }
   }, []);
 
@@ -74,6 +82,7 @@ function App() {
   useEffect(() => {
     const releaseResources = () => {
       clearProcessingTimer();
+      clearEmotionResetTimer();
       isRecordingRef.current = false;
       microphone.stop();
       player.close();
@@ -84,7 +93,13 @@ function App() {
       window.removeEventListener("pagehide", releaseResources);
       releaseResources();
     };
-  }, [clearProcessingTimer, client, microphone, player]);
+  }, [
+    clearEmotionResetTimer,
+    clearProcessingTimer,
+    client,
+    microphone,
+    player,
+  ]);
 
   useEffect(() => {
     // 监听下行二进制 PCM 音频流
@@ -103,10 +118,12 @@ function App() {
       }
       if (event.type === "turn.started" && isRecordingRef.current) {
         clearProcessingTimer();
+        clearEmotionResetTimer();
         setState("listening");
         setNotice("正在倾听你的声音... 松开发送");
       }
       if (event.type === "emotion.changed" && event.emotion) {
+        clearEmotionResetTimer();
         setEmotion(event.emotion);
       }
       if (event.type === "transcript.final" && event.text) {
@@ -150,6 +167,10 @@ function App() {
           setState("ready");
           setNotice("按住下方按钮开始说话");
         }
+        clearEmotionResetTimer();
+        emotionResetTimerRef.current = window.setTimeout(() => {
+          setEmotion("neutral");
+        }, 3500);
       }
       if (event.type === "connection.closed") {
         clearProcessingTimer();
@@ -180,6 +201,7 @@ function App() {
       unlistenEvents();
     };
   }, [
+    clearEmotionResetTimer,
     clearProcessingTimer,
     client,
     microphone,

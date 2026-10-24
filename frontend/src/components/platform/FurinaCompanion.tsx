@@ -10,20 +10,44 @@ type FurinaCompanionProps = {
 
 export function FurinaCompanion({
   state,
+  emotion,
   assistantText,
 }: FurinaCompanionProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const idleVideoRef = useRef<HTMLVideoElement>(null);
+  const happyVideoRef = useRef<HTMLVideoElement>(null);
   const [pipActive, setPipActive] = useState(false);
+
+  const isHappy =
+    emotion === "happy" ||
+    emotion === "开心" ||
+    emotion === "laughing" ||
+    emotion === "loving";
 
   // 根据当前会话状态调节视频倍速
   useEffect(() => {
-    if (!videoRef.current) return;
-    if (state === "speaking") {
-      videoRef.current.playbackRate = 1.08;
-    } else {
-      videoRef.current.playbackRate = 1.0;
+    const rate = state === "speaking" ? 1.08 : 1.0;
+    if (idleVideoRef.current) {
+      idleVideoRef.current.playbackRate = rate;
+    }
+    if (happyVideoRef.current) {
+      happyVideoRef.current.playbackRate = rate;
     }
   }, [state]);
+
+  // 当开心触发时，从头开始播放开心动画并确保播放
+  useEffect(() => {
+    if (isHappy && happyVideoRef.current) {
+      happyVideoRef.current.currentTime = 0;
+      const playVideo = async () => {
+        try {
+          await happyVideoRef.current?.play();
+        } catch {
+          // 忽略非用户手势导致自动播放策略受限
+        }
+      };
+      void playVideo();
+    }
+  }, [isHappy]);
 
   // 计算当前展示的气泡台词
   const bubbleText = assistantText
@@ -32,7 +56,7 @@ export function FurinaCompanion({
 
   // 画中画模式
   const togglePip = async () => {
-    const video = videoRef.current;
+    const video = isHappy ? happyVideoRef.current : idleVideoRef.current;
     if (!video) return;
     try {
       if (document.pictureInPictureElement) {
@@ -55,6 +79,14 @@ export function FurinaCompanion({
           <h2 className="furina-name">芙宁娜 (Furina)</h2>
         </div>
         <div className="furina-badge-group">
+          {isHappy && (
+            <span
+              className="furina-emotion-tag happy"
+              data-testid="furina-happy-badge"
+            >
+              ✨ 开心
+            </span>
+          )}
           <button
             type="button"
             className="pip-button"
@@ -67,14 +99,30 @@ export function FurinaCompanion({
       </div>
 
       <div className="furina-stage">
+        {/* 默认站立待机动画 */}
         <video
-          ref={videoRef}
+          ref={idleVideoRef}
           src="/assets/characters/furina/furina_idle.mp4"
-          className="furina-video"
+          className={`furina-video ${isHappy ? "furina-video-hidden" : "furina-video-active"}`}
           autoPlay
           loop
           muted
           playsInline
+          aria-label="芙宁娜站立待机动画"
+          data-testid="furina-video-idle"
+        />
+
+        {/* 开心微笑动画 */}
+        <video
+          ref={happyVideoRef}
+          src="/assets/characters/furina/furina_happy.mp4"
+          className={`furina-video ${isHappy ? "furina-video-active" : "furina-video-hidden"}`}
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-label="芙宁娜开心微笑动画"
+          data-testid="furina-video-happy"
         />
 
         {/* 动态台词气泡 */}
