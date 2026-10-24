@@ -151,7 +151,11 @@ func (s *Server) Handle(c *gin.Context) {
 			stream = opened
 			streamMu.Unlock()
 			_ = writeJSON(gin.H{"type": "turn.started", "clientTurnId": message.ClientTurnID, "turnId": message.ClientTurnID, "streamId": 1})
-			go s.forwardEvents(connection, &writeMu, opened)
+			go s.forwardEvents(connection, &writeMu, opened, func() bool {
+				streamMu.Lock()
+				defer streamMu.Unlock()
+				return stream == opened
+			})
 		case "turn.stop":
 			streamMu.Lock()
 			active := stream
@@ -175,9 +179,16 @@ func (s *Server) Handle(c *gin.Context) {
 	}
 }
 
-func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, stream provider.Stream) {
+func (s *Server) forwardEvents(connection *websocket.Conn, writeMu *sync.Mutex, stream provider.Stream, isCurrent func() bool) {
 	for event := range stream.Events() {
+		if !isCurrent() {
+			return
+		}
 		writeMu.Lock()
+		if !isCurrent() {
+			writeMu.Unlock()
+			return
+		}
 		var err error
 		switch event.Type {
 		case "audio.chunk":
