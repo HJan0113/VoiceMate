@@ -12,9 +12,11 @@ type PlatformLayoutProps = {
   sessionId?: string;
   lines: ChatLine[];
   disabled: boolean;
-  onPointerDown: () => void;
-  onPointerUp: () => void;
-  onPointerLeave: () => void;
+  muted: boolean;
+  onSessionAction: () => void;
+  onEndSession: () => void;
+  onInputAction: () => void;
+  onToggleMute: () => void;
 };
 
 export function PlatformLayout({
@@ -24,9 +26,11 @@ export function PlatformLayout({
   sessionId,
   lines,
   disabled,
-  onPointerDown,
-  onPointerUp,
-  onPointerLeave,
+  muted,
+  onSessionAction,
+  onEndSession,
+  onInputAction,
+  onToggleMute,
 }: PlatformLayoutProps) {
   return (
     <main className="shell">
@@ -69,9 +73,11 @@ export function PlatformLayout({
         state={state}
         notice={notice}
         disabled={disabled}
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
-        onPointerLeave={onPointerLeave}
+        muted={muted}
+        onSessionAction={onSessionAction}
+        onEndSession={onEndSession}
+        onInputAction={onInputAction}
+        onToggleMute={onToggleMute}
       />
       <footer>
         <span>通用实时会话底座</span>
