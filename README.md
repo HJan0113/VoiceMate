@@ -24,6 +24,14 @@ cd backend
 go run ./cmd/voicemate   # http://localhost:8080
 ```
 
+开发环境 Docker（前后端热加载）：
+
+```bash
+docker compose up --build
+```
+
+前端访问 `http://localhost:5173`。前端源码通过 Vite 热更新，后端源码通过 Air 自动重启；停止服务使用 `docker compose down`。
+
 前端质量检查：
 
 ```bash
