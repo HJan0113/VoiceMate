@@ -179,7 +179,13 @@ function App() {
       unlistenAudio();
       unlistenEvents();
     };
-  }, [clearProcessingTimer, client, microphone, player, startProcessingWatchdog]);
+  }, [
+    clearProcessingTimer,
+    client,
+    microphone,
+    player,
+    startProcessingWatchdog,
+  ]);
 
   // 连接服务（用于重试或手动开始）
   async function startSession() {
@@ -201,7 +207,8 @@ function App() {
 
   // 按住说话：按下开始录音采集并推流
   async function startVoice() {
-    if (state !== "ready" && state !== "speaking" && state !== "processing") return;
+    if (state !== "ready" && state !== "speaking" && state !== "processing")
+      return;
     clearProcessingTimer();
     setError(null);
     player.ensureContext();

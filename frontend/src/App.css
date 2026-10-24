@@ -430,7 +430,12 @@ footer {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: radial-gradient(circle at center, rgba(186, 230, 253, 0.45) 0%, rgba(240, 249, 255, 0.6) 70%, #ffffff 100%);
+  background: radial-gradient(
+    circle at center,
+    rgba(186, 230, 253, 0.45) 0%,
+    rgba(240, 249, 255, 0.6) 70%,
+    #ffffff 100%
+  );
   border-radius: 14px;
   overflow: hidden;
   border: 1px solid rgba(186, 230, 253, 0.5);
@@ -697,7 +702,6 @@ footer {
   cursor: not-allowed;
 }
 
-
 /* Push to Talk Button Styles */
 .push-to-talk-wrapper {
   display: flex;
@@ -735,7 +739,9 @@ footer {
 .ptt-button:active:not(:disabled),
 .ptt-button.recording {
   background: #dc2626;
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.3), 0 6px 20px rgba(220, 38, 38, 0.5);
+  box-shadow:
+    0 0 0 4px rgba(220, 38, 38, 0.3),
+    0 6px 20px rgba(220, 38, 38, 0.5);
   transform: scale(0.98);
 }
 

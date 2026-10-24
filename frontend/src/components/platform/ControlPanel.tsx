@@ -15,7 +15,10 @@ type ControlPanelProps = {
   onSendText?: (text: string) => void;
 };
 
-function getPttButtonText(state: ConnectionState, isRecording: boolean): string {
+function getPttButtonText(
+  state: ConnectionState,
+  isRecording: boolean,
+): string {
   if (isRecording) {
     return "松开发送";
   }
@@ -44,7 +47,11 @@ export function ControlPanel({
   const [chatText, setChatText] = useState("");
   const [isPressing, setIsPressing] = useState(false);
 
-  const isConnected = state === "ready" || state === "listening" || state === "speaking" || state === "processing";
+  const isConnected =
+    state === "ready" ||
+    state === "listening" ||
+    state === "speaking" ||
+    state === "processing";
   const isRecording = state === "listening" || isPressing;
   const sessionLabel = state === "error" ? "重试连接" : "开始会话";
 
@@ -133,8 +140,11 @@ export function ControlPanel({
             className="call-action-btn call-start"
             onClick={onSessionAction}
             disabled={disabled}
+            aria-label={sessionLabel}
           >
-            <span className="call-icon">⚡</span>
+            <span className="call-icon" aria-hidden="true">
+              ⚡
+            </span>
             <span>{sessionLabel}</span>
           </button>
         ) : (
@@ -152,7 +162,9 @@ export function ControlPanel({
               aria-label={isRecording ? "松开发送" : "开始输入"}
             >
               <span className="ptt-icon">{isRecording ? "🔴" : "🎙️"}</span>
-              <span className="ptt-text">{getPttButtonText(state, isRecording)}</span>
+              <span className="ptt-text">
+                {getPttButtonText(state, isRecording)}
+              </span>
             </button>
 
             <div className="ptt-sub-bar">
@@ -186,7 +198,11 @@ export function ControlPanel({
             value={chatText}
             onChange={(e) => setChatText(e.target.value)}
           />
-          <button type="submit" className="call-chat-send" disabled={!chatText.trim()}>
+          <button
+            type="submit"
+            className="call-chat-send"
+            disabled={!chatText.trim()}
+          >
             发送
           </button>
         </form>
