@@ -13,10 +13,8 @@ import { RealtimeClient } from "./services/realtime";
 import "./App.css";
 
 function App() {
-  const [state, setState] = useState<ConnectionState>("idle");
-  const [notice, setNotice] = useState(
-    "准备与芙宁娜实时通话，请点击下方「接通电话」",
-  );
+  const [state, setState] = useState<ConnectionState>("connecting");
+  const [notice, setNotice] = useState("正在连接灵矽服务...");
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [lines, setLines] = useState<ChatLine[]>([]);
@@ -28,13 +26,35 @@ function App() {
   const microphone = useMemo(() => new MicrophoneCapture(), []);
   const player = useMemo(() => new PcmStreamPlayer(16000), []);
 
-  const turnId = useRef(`call_${crypto.randomUUID()}`);
-  const inCallRef = useRef(false);
+  const turnId = useRef(`turn_${crypto.randomUUID()}`);
+  const isRecordingRef = useRef(false);
   const mutedRef = useRef(false);
+
+  // 页面加载时自动连接服务
+  useEffect(() => {
+    let canceled = false;
+    const init = async () => {
+      try {
+        const nextSession = await createSession();
+        if (canceled) return;
+        setSession(nextSession);
+        await client.connect(nextSession.wsUrl, nextSession.ephemeralToken);
+      } catch {
+        if (canceled) return;
+        setState("error");
+        setError("连接失败，请确认后端已启动（端口 8080）");
+        setNotice("服务未连接");
+      }
+    };
+    void init();
+    return () => {
+      canceled = true;
+    };
+  }, [client]);
 
   useEffect(() => {
     const releaseResources = () => {
-      inCallRef.current = false;
+      isRecordingRef.current = false;
       microphone.stop();
       player.close();
       client.close();
@@ -47,7 +67,7 @@ function App() {
   }, [client, microphone, player]);
 
   useEffect(() => {
-    // 监听下行二进制 PCM 语音流
+    // 监听下行二进制 PCM 音频流
     const unlistenAudio = client.onAudio((chunk) => {
       if (!mutedRef.current) {
         player.feed(chunk);
@@ -56,9 +76,13 @@ function App() {
 
     const unlistenEvents = client.on((event: ServerEvent) => {
       if (event.type === "session.ready") {
-        setState("calling");
+        setState("ready");
         setError(null);
-        setNotice("与芙宁娜实时通话中 · 请随时说话...");
+        setNotice("服务已就绪 · 按住下方按钮开始说话");
+      }
+      if (event.type === "turn.started" && isRecordingRef.current) {
+        setState("listening");
+        setNotice("正在倾听你的声音... 松开发送");
       }
       if (event.type === "emotion.changed" && event.emotion) {
         setEmotion(event.emotion);
@@ -72,6 +96,8 @@ function App() {
             text: event.text!,
           },
         ]);
+        setState("processing");
+        setNotice("正在思考回复...");
       }
       if (event.type === "response.delta" && event.text) {
         setState("speaking");
@@ -94,23 +120,22 @@ function App() {
           ];
         });
       }
-      if (event.type === "audio.end") {
-        // 芙宁娜一段语音播放完毕，恢复为常驻通话倾听状态，麦克风继续工作
-        if (inCallRef.current) {
-          setState("calling");
-          setNotice("与芙宁娜实时通话中 · 请随时说话...");
+      if (event.type === "turn.completed" || event.type === "audio.end") {
+        if (!isRecordingRef.current) {
+          setState("ready");
+          setNotice("按住下方按钮开始说话");
         }
       }
       if (event.type === "connection.closed") {
-        inCallRef.current = false;
+        isRecordingRef.current = false;
         microphone.stop();
         player.stop();
         setState("error");
-        setError("通话连接已断开，可点击重新呼叫");
-        setNotice("连接已断开");
+        setError("实时连接已断开，请重试连接");
+        setNotice("连接断开");
       }
       if (event.type === "error") {
-        inCallRef.current = false;
+        isRecordingRef.current = false;
         microphone.stop();
         player.stop();
         setState("error");
@@ -119,7 +144,7 @@ function App() {
             ? `实时服务错误（${event.code}），请重试`
             : "实时服务返回错误，请重试",
         );
-        setNotice("通话异常");
+        setNotice("连接异常");
       }
     });
 
@@ -129,43 +154,71 @@ function App() {
     };
   }, [client, microphone, player]);
 
-  // 接通实时电话
-  async function startCall() {
-    if (state !== "idle" && state !== "error") return;
+  // 连接服务（用于重试或手动开始）
+  async function startSession() {
     setError(null);
     client.close();
     player.ensureContext();
     setState("connecting");
-    setNotice("正在呼叫芙宁娜，建立实时通话...");
+    setNotice("正在连接灵矽AI伴侣服务...");
     try {
       const nextSession = await createSession();
       setSession(nextSession);
       await client.connect(nextSession.wsUrl, nextSession.ephemeralToken);
-
-      // 发起通话流
-      turnId.current = `call_${crypto.randomUUID()}`;
-      inCallRef.current = true;
-      client.startTurn(turnId.current);
-
-      // 立即开启麦克风全双工持续采集
-      await microphone.start((frame) => {
-        if (inCallRef.current && !mutedRef.current) {
-          client.sendAudio(frame);
-        }
-      });
     } catch {
-      inCallRef.current = false;
-      microphone.stop();
-      client.close();
       setState("error");
-      setError("呼叫失败，请确认服务已启动或检查麦克风权限");
-      setNotice("无法接通");
+      setError("连接失败，请确认后端已启动（端口 8080）");
+      setNotice("服务未连接");
     }
   }
 
-  // 挂断电话
-  function endCall() {
-    inCallRef.current = false;
+  // 按住说话：按下开始录音采集并推流
+  async function startVoice() {
+    if (state !== "ready" && state !== "speaking" && state !== "processing") return;
+    setError(null);
+    player.ensureContext();
+    player.stop(); // 打断当前正在播放的声音
+    setAssistantText("");
+    isRecordingRef.current = true;
+    turnId.current = `turn_${crypto.randomUUID()}`;
+    setState("listening");
+    setNotice("正在倾听你的声音... 松开发送");
+    client.startTurn(turnId.current);
+
+    try {
+      await microphone.start((frame) => {
+        if (isRecordingRef.current && !mutedRef.current) {
+          client.sendAudio(frame);
+        }
+      });
+      if (!isRecordingRef.current) {
+        microphone.stop();
+      }
+    } catch {
+      if (isRecordingRef.current) {
+        isRecordingRef.current = false;
+        microphone.stop();
+        client.interrupt();
+        setState("ready");
+        setError("无法访问麦克风，请在浏览器地址栏检查麦克风权限！");
+        setNotice("麦克风未授权");
+      }
+    }
+  }
+
+  // 松开手指/鼠标：停止录音采集，通知服务端生成回答
+  function stopVoice() {
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+    microphone.stop();
+    client.stopTurn();
+    setState("processing");
+    setNotice("正在思考与回复中...");
+  }
+
+  // 结束/重置会话
+  function endSession() {
+    isRecordingRef.current = false;
     microphone.stop();
     player.stop();
     client.interrupt();
@@ -176,17 +229,16 @@ function App() {
     setAssistantText("");
     setState("idle");
     setError(null);
-    setNotice("通话已挂断，可随时重新接通电话");
+    setNotice("会话已断开，点击重新连接");
   }
 
-  // 发送文本（打字或触摸彩蛋）
+  // 发送文本
   function sendText(text: string) {
-    if (!text) return;
+    if (!text || state !== "ready") return;
     player.ensureContext();
-    player.stop(); // 打断当前播放
+    player.stop();
     setAssistantText("");
 
-    // 添加到聊天记录
     setLines((current) => [
       ...current,
       {
@@ -196,7 +248,8 @@ function App() {
       },
     ]);
 
-    // 发送给灵矽 AI
+    setState("processing");
+    setNotice("正在思考与回复中...");
     client.sendText(text);
   }
 
@@ -211,13 +264,15 @@ function App() {
       muted={muted}
       emotion={emotion}
       assistantText={assistantText}
-      onSessionAction={() => void startCall()}
-      onEndSession={endCall}
+      onSessionAction={() => void startSession()}
+      onEndSession={endSession}
       onToggleMute={() => {
         mutedRef.current = !mutedRef.current;
         setMuted(mutedRef.current);
         player.setMuted(mutedRef.current);
       }}
+      onStartVoice={() => void startVoice()}
+      onStopVoice={stopVoice}
       onSendText={sendText}
     />
   );

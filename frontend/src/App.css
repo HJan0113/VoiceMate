@@ -670,3 +670,100 @@ footer {
   background: #94a3b8;
   cursor: not-allowed;
 }
+
+
+/* Push to Talk Button Styles */
+.push-to-talk-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 12px;
+}
+
+.ptt-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 18px 24px;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.35);
+  transition: all 0.15s ease;
+}
+
+.ptt-button:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.ptt-button:active:not(:disabled),
+.ptt-button.recording {
+  background: #dc2626;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.3), 0 6px 20px rgba(220, 38, 38, 0.5);
+  transform: scale(0.98);
+}
+
+.ptt-button:disabled {
+  background: #94a3b8;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.ptt-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.ptt-text {
+  font-size: 16px;
+  letter-spacing: 0.05em;
+}
+
+.ptt-sub-bar {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.ptt-sub-btn {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ptt-sub-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.ptt-sub-btn.muted {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.ptt-sub-btn.hangup {
+  color: #6b7280;
+}
+
+.ptt-sub-btn.hangup:hover {
+  color: #ef4444;
+  border-color: #fca5a5;
+}

@@ -280,11 +280,14 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 					})
 				}
 			case "stop":
-				// 一句播报完毕：下发 audio.end，但不关闭当前 stream，保持实时全双工电话通道畅通
 				active.emit(provider.Event{
 					Type:     "audio.end",
 					TurnID:   active.turnID,
 					StreamID: 1,
+				})
+				active.emit(provider.Event{
+					Type:   "turn.completed",
+					TurnID: active.turnID,
 				})
 			}
 		}
@@ -306,7 +309,7 @@ func (p *Provider) Open(ctx context.Context, _ string, turnID string) (provider.
 	s := newStream(turnID, p)
 	p.stream = s
 
-	// 发送 listen: start，指定 mode: auto 开启云端全双工实时 VAD 电话交互
+	// 发送 listen: start
 	startMsg := map[string]interface{}{
 		"session_id": p.sessionID,
 		"type":       "listen",
@@ -391,7 +394,14 @@ func (s *stream) Events() <-chan provider.Event {
 }
 
 func (s *stream) Stop() {
-	// 在实时全双工电话模式下，云端基于 VAD 自动检测停顿，无需主动断开监听
+	s.stop.Do(func() {
+		stopMsg := map[string]interface{}{
+			"session_id": s.provider.sessionID,
+			"type":       "listen",
+			"state":      "stop",
+		}
+		_ = s.provider.writeJSON(stopMsg)
+	})
 }
 
 func (s *stream) Interrupt() {

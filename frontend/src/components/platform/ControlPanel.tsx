@@ -10,8 +10,23 @@ type ControlPanelProps = {
   onEndSession: () => void;
   onToggleMute: () => void;
   onInputAction?: () => void;
+  onStartVoice?: () => void;
+  onStopVoice?: () => void;
   onSendText?: (text: string) => void;
 };
+
+function getPttButtonText(state: ConnectionState, isRecording: boolean): string {
+  if (isRecording) {
+    return "松开发送";
+  }
+  if (state === "speaking") {
+    return "芙宁娜说话中...";
+  }
+  if (state === "processing") {
+    return "正在思考...";
+  }
+  return "按住说话";
+}
 
 export function ControlPanel({
   state,
@@ -21,12 +36,80 @@ export function ControlPanel({
   onSessionAction,
   onEndSession,
   onToggleMute,
+  onInputAction,
+  onStartVoice,
+  onStopVoice,
   onSendText,
 }: ControlPanelProps) {
   const [chatText, setChatText] = useState("");
-  const isCalling =
-    state === "calling" || state === "speaking" || state === "listening";
-  const isConnecting = state === "connecting";
+  const [isPressing, setIsPressing] = useState(false);
+
+  const isConnected = state === "ready" || state === "listening" || state === "speaking" || state === "processing";
+  const isRecording = state === "listening" || isPressing;
+  const sessionLabel = state === "error" ? "重试连接" : "开始会话";
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (disabled || !isConnected) return;
+    setIsPressing(true);
+    if (onStartVoice) {
+      onStartVoice();
+    } else if (onInputAction) {
+      onInputAction();
+    }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isPressing) {
+      setIsPressing(false);
+      if (onStopVoice) {
+        onStopVoice();
+      } else if (onInputAction) {
+        onInputAction();
+      }
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isPressing) {
+      setIsPressing(false);
+      if (onStopVoice) {
+        onStopVoice();
+      } else if (onInputAction) {
+        onInputAction();
+      }
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (disabled || !isConnected) return;
+    setIsPressing(true);
+    if (onStartVoice) {
+      onStartVoice();
+    } else if (onInputAction) {
+      onInputAction();
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (isPressing) {
+      setIsPressing(false);
+      if (onStopVoice) {
+        onStopVoice();
+      } else if (onInputAction) {
+        onInputAction();
+      }
+    }
+  };
+
+  const handleClick = () => {
+    if (onInputAction) {
+      onInputAction();
+    }
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,66 +119,65 @@ export function ControlPanel({
     setChatText("");
   };
 
-  function renderCallActions() {
-    if (isConnecting) {
-      return (
-        <button
-          type="button"
-          className="call-action-btn call-connecting"
-          disabled
-        >
-          <span className="call-icon call-pulse">📞</span>
-          <span>正在接通灵矽AI...</span>
-        </button>
-      );
-    }
-    if (isCalling) {
-      return (
-        <div className="in-call-controls">
-          <button
-            type="button"
-            className={`call-sub-btn ${muted ? "muted" : ""}`}
-            onClick={onToggleMute}
-            title={muted ? "解除麦克风静音" : "静音麦克风"}
-          >
-            <span>{muted ? "🔇" : "🎙️"}</span>
-            <span>{muted ? "已静音" : "麦克风开启"}</span>
-          </button>
-          <button
-            type="button"
-            className="call-action-btn call-hangup"
-            onClick={onEndSession}
-          >
-            <span>🔴</span>
-            <span>挂断电话</span>
-          </button>
-        </div>
-      );
-    }
-    return (
-      <button
-        type="button"
-        className="call-action-btn call-start"
-        onClick={onSessionAction}
-        disabled={disabled}
-      >
-        <span className="call-icon">📞</span>
-        <span>{state === "error" ? "重新呼叫" : "接通实时电话"}</span>
-      </button>
-    );
-  }
-
   return (
     <section className="control-panel" aria-label="操作区">
       <div className="call-status-header">
-        <p className="panel-label">REALTIME CALL CONTROL</p>
+        <p className="panel-label">VOICE CONTROL</p>
         <h2>{notice}</h2>
       </div>
 
-      <div className="control-actions">{renderCallActions()}</div>
+      <div className="control-actions">
+        {!isConnected ? (
+          <button
+            type="button"
+            className="call-action-btn call-start"
+            onClick={onSessionAction}
+            disabled={disabled}
+          >
+            <span className="call-icon">⚡</span>
+            <span>{sessionLabel}</span>
+          </button>
+        ) : (
+          <div className="push-to-talk-wrapper">
+            <button
+              type="button"
+              className={`ptt-button ${isRecording ? "recording" : ""}`}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onClick={handleClick}
+              disabled={disabled || state === "speaking" || state === "processing"}
+              aria-label={isRecording ? "松开发送" : "开始输入"}
+            >
+              <span className="ptt-icon">{isRecording ? "🔴" : "🎙️"}</span>
+              <span className="ptt-text">{getPttButtonText(state, isRecording)}</span>
+            </button>
 
-      {/* 实时通话文本发送辅助框 */}
-      {isCalling && (
+            <div className="ptt-sub-bar">
+              <button
+                type="button"
+                className={`ptt-sub-btn ${muted ? "muted" : ""}`}
+                onClick={onToggleMute}
+                aria-pressed={muted}
+              >
+                <span>{muted ? "取消静音" : "静音"}</span>
+              </button>
+              <button
+                type="button"
+                className="ptt-sub-btn hangup"
+                onClick={onEndSession}
+              >
+                <span>结束会话</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 文本发送栏 */}
+      {isConnected && (
         <form className="call-chat-bar" onSubmit={handleSend}>
           <input
             type="text"
@@ -104,11 +186,7 @@ export function ControlPanel({
             value={chatText}
             onChange={(e) => setChatText(e.target.value)}
           />
-          <button
-            type="submit"
-            className="call-chat-send"
-            disabled={!chatText.trim()}
-          >
+          <button type="submit" className="call-chat-send" disabled={!chatText.trim()}>
             发送
           </button>
         </form>
