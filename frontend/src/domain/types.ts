@@ -1,11 +1,3 @@
-export type Character = {
-  id: string;
-  displayName: string;
-  status: string;
-  voiceProfile: string;
-  emotionProfiles: Record<string, { video: string; playbackRate: number }>;
-};
-
 export type ConnectionState =
   | "idle"
   | "connecting"
