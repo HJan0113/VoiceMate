@@ -26,6 +26,8 @@ func NewService() *Service {
 			EmotionProfiles: map[string]domain.EmotionProfile{
 				"idle":     {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.0},
 				"happy":    {Video: "/assets/characters/furina/furina_happy.mp4", PlaybackRate: 1.0},
+				"sad":      {Video: "/assets/characters/furina/furina_sad.mp4", PlaybackRate: 1.0},
+				"crying":   {Video: "/assets/characters/furina/furina_sad.mp4", PlaybackRate: 1.0},
 				"speaking": {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.08},
 				"proud":    {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.08},
 				"thinking": {Video: "/assets/characters/furina/furina_idle.mp4", PlaybackRate: 1.0},

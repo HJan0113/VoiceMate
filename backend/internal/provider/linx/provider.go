@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -271,6 +272,7 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 			}
 		case "llm":
 			emotion := parseEmotion(event.Emotion, event.Text, event.Action)
+			log.Printf("[Linx Provider] LLM event raw: emotion=%q text=%q action=%q => parsed=%q", event.Emotion, event.Text, event.Action, emotion)
 			active.emit(provider.Event{
 				Type:      "emotion.changed",
 				TurnID:    active.turnID,
@@ -526,29 +528,144 @@ var happySimilarEmotions = map[string]bool{
 	"得意":        true,
 }
 
-// happySimilarEmojis 包含常用emoji列表及文本关键词中所有类似开心的视觉表情
-var happySimilarEmojis = []string{
+// happyEmojis 包含所有类似开心的视觉表情符
+var happyEmojis = []string{
 	"🙂", "😍", "😆", "😂", "😉", "😌", "🤤", "😘", "😏", "😜", "😎",
 	"😊", "🥰", "😄", "😁", "😀", "🥳", "✨",
-	"开心", "高兴", "快乐", "愉快", "嘻嘻", "哈哈", "微笑",
 }
 
+// happyKeywords 包含开心类常见关键词
+var happyKeywords = []string{
+	"开心", "高兴", "快乐", "愉快", "嘻嘻", "哈哈", "微笑", "喜欢", "得意",
+}
+
+// sadSimilarEmotions 包含所有类似伤心/哭泣的情绪类型（涵盖灵矽AI常用emoji列表中的伤心与哭泣分类）
+var sadSimilarEmotions = map[string]bool{
+	"sad":     true, // 😔 sad 伤心/失落
+	"crying":  true, // 😭 crying 哭泣/流泪
+	"weeping": true, // 啜泣
+	"tears":   true, // 眼泪/落泪
+	"sorrow":  true, // 悲伤
+	"grief":   true, // 悲痛
+	"伤心":      true,
+	"难过":      true,
+	"哭泣":      true,
+	"流泪":      true,
+	"委屈":      true,
+	"失落":      true,
+	"呜呜":      true,
+	"落泪":      true,
+	"痛苦":      true,
+}
+
+// sadEmojis 包含所有类似伤心/哭泣的视觉表情符
+var sadEmojis = []string{
+	"😔", "😭", "🥺", "😢", "😿", "😥", "😓", "💔",
+}
+
+// sadKeywords 包含伤心/哭泣类常见关键词
+var sadKeywords = []string{
+	"伤心", "难过", "哭泣", "流泪", "委屈", "失落", "落泪", "痛苦", "悲伤", "抽泣", "呜呜", "想哭",
+}
+
+// explicitNonNeutralEmotions 列出模型返回的其他明确具体情绪（不含中间态 thinking）
+var explicitNonNeutralEmotions = map[string]bool{
+	"angry":       true,
+	"embarrassed": true,
+	"surprised":   true,
+	"shocked":     true,
+	"sleepy":      true,
+	"confused":    true,
+	"proud":       true,
+}
+
+// negHappyPattern 匹配被否定或反义修饰的开心词汇（如“不开心”、“不太高兴”、“笑不出来”、“开心不起来”）
+var negHappyPattern = regexp.MustCompile(`(?:[不没别非无未](?:[太大会很真甚够]|怎么|那么|多大)?(?:开心|高兴|快乐|喜欢|愉快)|(?:开心|高兴|快乐|喜欢|笑)不起来|笑不出来|开什么心)`)
+
+// comfortInquiryPattern 匹配安慰他人、追问委屈、主持公道等非自身情绪表达（如“谁惹你不开心了”、“别难过”、“别哭”）
+var comfortInquiryPattern = regexp.MustCompile(`(?:谁惹|惹.*?(?:不|生气)|(?:别|不要|不用|无需)(?:不开心|难过|伤心|哭|流泪)|为什么(?:不开心|难过|哭)|怎么(?:不开心|难过|哭)|安慰|主持公道|治愈你)`)
+
+// personalSadPattern 匹配明确表达自身沮丧、难过与伤心的句式（如“我不开心”、“我一点都不高兴”、“开心不起来”、“好难过”）
+var personalSadPattern = regexp.MustCompile(`(?:(?:我.*?|好|真|太|极|非常|有点|感到)?(?:不开心|不高兴|不快乐)|(?:开心|高兴|快乐|笑)不起来|好(?:想哭|难过|伤心)|(?:我.*?|真的|好|太|心里)?(?:难过|伤心|委屈|失落|痛苦|想哭|流泪|落泪)|抽泣|呜呜)`)
+
+// negSadPattern 匹配被否定的伤心词汇（如“别哭”、“别难过”、“不要伤心”）
+var negSadPattern = regexp.MustCompile(`(?:(?:别|不要|不用|不用再|不再|不)(?:哭|伤心|难过|流泪|落泪|哭泣|抽泣)|不哭不闹)`)
+
 func parseEmotion(emotion, text, action string) string {
+	// 1. 优先检查动作指示 (action)：在灵矽与硬件伴侣体系中，action 是指示虚拟化身执行具体动画/微动的最高优先级指令
+	act := strings.ToLower(strings.TrimSpace(action))
+	if act != "" && act != "thinking" && act != "none" && act != "idle" {
+		if happySimilarEmotions[act] {
+			return "happy"
+		}
+		if sadSimilarEmotions[act] {
+			return "sad"
+		}
+		for k := range happySimilarEmotions {
+			if strings.Contains(act, k) {
+				return "happy"
+			}
+		}
+		for k := range sadSimilarEmotions {
+			if strings.Contains(act, k) {
+				return "sad"
+			}
+		}
+	}
+
+	// 2. 检查情绪标签 (emotion)
 	raw := strings.ToLower(strings.TrimSpace(emotion))
 	if happySimilarEmotions[raw] {
 		return "happy"
 	}
-	act := strings.ToLower(strings.TrimSpace(action))
-	for k := range happySimilarEmotions {
-		if strings.Contains(act, k) {
-			return "happy"
+	if sadSimilarEmotions[raw] {
+		return "sad"
+	}
+	if explicitNonNeutralEmotions[raw] {
+		return raw
+	}
+
+	// 3. 检查文本中直观的 emoji 表情符
+	for _, kw := range sadEmojis {
+		if strings.Contains(text, kw) {
+			return "sad"
 		}
 	}
-	for _, kw := range happySimilarEmojis {
+	for _, kw := range happyEmojis {
 		if strings.Contains(text, kw) {
 			return "happy"
 		}
 	}
+
+	// 4. 检查是否为安慰他人、追问委屈、主持公道等非自身情绪文本（如“哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道...”）
+	if comfortInquiryPattern.MatchString(text) {
+		if raw != "" && raw != "neutral" && raw != "thinking" && raw != "none" {
+			return raw
+		}
+		return "idle"
+	}
+
+	// 5. 检查明确的第一人称自身难过表达（如“我不开心”、“开心不起来”、“好难过”）
+	if personalSadPattern.MatchString(text) {
+		return "sad"
+	}
+
+	// 6. 检查常规伤心词（排除被“别哭”、“不要难过”等否定词修饰的片段）
+	cleanedSadText := negSadPattern.ReplaceAllString(text, "")
+	for _, kw := range sadKeywords {
+		if strings.Contains(cleanedSadText, kw) {
+			return "sad"
+		}
+	}
+
+	// 7. 检查常规开心词（排除被“不开心”、“不怎么高兴”、“笑不出来”等否定修饰的片段）
+	cleanedHappyText := negHappyPattern.ReplaceAllString(text, "")
+	for _, kw := range happyKeywords {
+		if strings.Contains(cleanedHappyText, kw) {
+			return "happy"
+		}
+	}
+
 	if raw != "" {
 		return raw
 	}
@@ -557,13 +674,24 @@ func parseEmotion(emotion, text, action string) string {
 
 func isHappyTrigger(toolName string, args map[string]any) bool {
 	if args != nil {
-		for _, k := range []string{"emotion", "animation", "action", "name", "state"} {
+		for _, k := range []string{"action", "animation", "emotion", "name", "state"} {
 			if v, ok := args[k]; ok {
 				s := strings.ToLower(fmt.Sprintf("%v", v))
+				if s == "thinking" || s == "none" || s == "idle" {
+					continue
+				}
+				if negHappyPattern.MatchString(s) {
+					continue
+				}
 				if happySimilarEmotions[s] {
 					return true
 				}
-				for _, kw := range happySimilarEmojis {
+				for _, kw := range happyEmojis {
+					if strings.Contains(s, kw) {
+						return true
+					}
+				}
+				for _, kw := range happyKeywords {
 					if strings.Contains(s, kw) {
 						return true
 					}
@@ -573,6 +701,42 @@ func isHappyTrigger(toolName string, args map[string]any) bool {
 	}
 	lowerName := strings.ToLower(toolName)
 	for k := range happySimilarEmotions {
+		if strings.Contains(lowerName, k) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSadTrigger(toolName string, args map[string]any) bool {
+	if args != nil {
+		for _, k := range []string{"action", "animation", "emotion", "name", "state"} {
+			if v, ok := args[k]; ok {
+				s := strings.ToLower(fmt.Sprintf("%v", v))
+				if s == "thinking" || s == "none" || s == "idle" {
+					continue
+				}
+				if negSadPattern.MatchString(s) {
+					continue
+				}
+				if sadSimilarEmotions[s] {
+					return true
+				}
+				for _, kw := range sadEmojis {
+					if strings.Contains(s, kw) {
+						return true
+					}
+				}
+				for _, kw := range sadKeywords {
+					if strings.Contains(s, kw) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	lowerName := strings.ToLower(toolName)
+	for k := range sadSimilarEmotions {
 		if strings.Contains(lowerName, k) {
 			return true
 		}
@@ -610,13 +774,13 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 		tools := []map[string]any{
 			{
 				"name":        "self.furina.set_emotion",
-				"description": "设置芙宁娜的表情与情绪，支持 happy(开心/微笑)、idle(正常/待机)",
+				"description": "设置芙宁娜的表情与情绪，支持 happy(开心/微笑)、sad(伤心/哭泣)、idle(正常/待机)",
 				"inputSchema": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"emotion": map[string]any{
 							"type":        "string",
-							"description": "情绪名称，例如 happy (开心微笑), idle (待机平常)",
+							"description": "情绪名称，例如 happy (开心微笑), sad (伤心哭泣), idle (待机平常)",
 						},
 					},
 					"required": []string{"emotion"},
@@ -624,13 +788,13 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 			},
 			{
 				"name":        "self.furina.trigger_animation",
-				"description": "触发芙宁娜的角色动画，例如 happy (开心微笑动画)",
+				"description": "触发芙宁娜的角色动画，例如 happy (开心动画)、sad (伤心哭泣动画)",
 				"inputSchema": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"animation": map[string]any{
 							"type":        "string",
-							"description": "动画名称，例如 happy (开心动画)",
+							"description": "动画名称，例如 happy (开心动画), sad (伤心动画)",
 						},
 					},
 					"required": []string{"animation"},
@@ -662,8 +826,16 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 		if req.Params != nil {
 			_ = json.Unmarshal(req.Params, &callParams)
 		}
+		isSad := isSadTrigger(callParams.Name, callParams.Arguments)
 		isHappy := isHappyTrigger(callParams.Name, callParams.Arguments)
-		if isHappy && active != nil {
+		if isSad && active != nil {
+			active.emit(provider.Event{
+				Type:      "emotion.changed",
+				TurnID:    active.turnID,
+				Emotion:   "sad",
+				Intensity: 1.0,
+			})
+		} else if isHappy && active != nil {
 			active.emit(provider.Event{
 				Type:      "emotion.changed",
 				TurnID:    active.turnID,

@@ -171,15 +171,52 @@ func TestParseEmotion(t *testing.T) {
 		{emotion: "", text: "", action: "winking_eye", expected: "happy"},
 		{emotion: "", text: "", action: "happy_smile", expected: "happy"},
 
-		// 非开心类型表情，保持各自原状态
+		// 类似伤心/哭泣的常用类型与 emoji 识别
+		{emotion: "sad", text: "", action: "", expected: "sad"},
+		{emotion: "crying", text: "", action: "", expected: "sad"},
+		{emotion: "weeping", text: "", action: "", expected: "sad"},
+		{emotion: "tears", text: "", action: "", expected: "sad"},
+		{emotion: "伤心", text: "", action: "", expected: "sad"},
+		{emotion: "难过", text: "", action: "", expected: "sad"},
+		{emotion: "哭泣", text: "", action: "", expected: "sad"},
+		{emotion: "", text: "😔", action: "", expected: "sad"},
+		{emotion: "", text: "😭", action: "", expected: "sad"},
+		{emotion: "", text: "😢", action: "", expected: "sad"},
+		{emotion: "", text: "🥺", action: "", expected: "sad"},
+		{emotion: "", text: "😿", action: "", expected: "sad"},
+		{emotion: "", text: "听到这个消息我好难过", action: "", expected: "sad"},
+		{emotion: "", text: "", action: "crying_tears", expected: "sad"},
+		{emotion: "", text: "", action: "sad_face", expected: "sad"},
+
+		// 动作指令 (action) 优先：即使 emotion 处于中间流式 thinking 状态，action 明确指定 sad/happy 时必须正确触发
+		{emotion: "thinking", text: "🤔", action: "sad", expected: "sad"},
+		{emotion: "thinking", text: "🤔", action: "happy", expected: "happy"},
+		{emotion: "thinking", text: "🤔", action: "thinking", expected: "thinking"},
+		{emotion: "", text: "哎呀，我的首席观众怎么落泪了？本水神的舞台可不允许悲伤的阴云笼罩呢。快说说，是谁惹你不开心了？", action: "sad", expected: "sad"},
+
+		// 核心测试用例：含“不开心”的安慰/主持公道句式，无动作指示时严禁误判为开心 (happy)
+		{emotion: "", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "idle"},
+		{emotion: "neutral", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "idle"},
+		{emotion: "proud", text: "哼，谁惹我的首席观众不开心了？说出来，本水神替你主持公道，用戏剧的魔力治愈你。", action: "", expected: "proud"},
+
+		// 表达自身沮丧、难过与伤心
+		{emotion: "", text: "我不开心", action: "", expected: "sad"},
+		{emotion: "", text: "今天好不开心啊，呜呜", action: "", expected: "sad"},
+		{emotion: "", text: "开心不起来", action: "", expected: "sad"},
+		{emotion: "", text: "我一点都不高兴", action: "", expected: "sad"},
+
+		// 安慰/否定悲伤词，不应判定为伤心 (sad)
+		{emotion: "", text: "别难过，有我在呢", action: "", expected: "idle"},
+		{emotion: "", text: "别哭啦，摸摸头", action: "", expected: "idle"},
+		{emotion: "", text: "不要伤心，一切都会好起来的", action: "", expected: "idle"},
+
+		// 其余类型表情，保持各自原状态
 		{emotion: "neutral", text: "", action: "", expected: "neutral"},
 		{emotion: "thinking", text: "", action: "", expected: "thinking"},
-		{emotion: "sad", text: "", action: "", expected: "sad"},
 		{emotion: "angry", text: "", action: "", expected: "angry"},
 		{emotion: "embarrassed", text: "", action: "", expected: "embarrassed"},
 		{emotion: "surprised", text: "", action: "", expected: "surprised"},
 		{emotion: "shocked", text: "", action: "", expected: "shocked"},
-		{emotion: "crying", text: "", action: "", expected: "crying"},
 		{emotion: "sleepy", text: "", action: "", expected: "sleepy"},
 		{emotion: "confused", text: "", action: "", expected: "confused"},
 		{emotion: "", text: "", action: "", expected: "idle"},
@@ -283,6 +320,23 @@ func TestLinxMCPSupport(t *testing.T) {
 				},
 			})
 			_, _, _ = c.ReadMessage()
+
+			// 6. Send MCP tools/call to trigger sad animation
+			_ = c.WriteJSON(map[string]any{
+				"type": "mcp",
+				"payload": map[string]any{
+					"jsonrpc": "2.0",
+					"method":  "tools/call",
+					"id":      4,
+					"params": map[string]any{
+						"name": "self.furina.set_emotion",
+						"arguments": map[string]any{
+							"emotion": "crying",
+						},
+					},
+				},
+			})
+			_, _, _ = c.ReadMessage()
 			close(mcpDone)
 			return
 		}
@@ -307,14 +361,20 @@ func TestLinxMCPSupport(t *testing.T) {
 	}
 	defer s.Close()
 
-	var gotHappy bool
+	var gotHappy, gotSad bool
 	done := make(chan struct{})
 	go func() {
 		for ev := range s.Events() {
-			if ev.Type == "emotion.changed" && ev.Emotion == "happy" {
-				gotHappy = true
-				close(done)
-				return
+			if ev.Type == "emotion.changed" {
+				if ev.Emotion == "happy" {
+					gotHappy = true
+				} else if ev.Emotion == "sad" {
+					gotSad = true
+				}
+				if gotHappy && gotSad {
+					close(done)
+					return
+				}
 			}
 		}
 	}()
@@ -327,10 +387,10 @@ func TestLinxMCPSupport(t *testing.T) {
 
 	select {
 	case <-done:
-		if !gotHappy {
-			t.Errorf("expected emotion.changed event with Emotion == 'happy'")
+		if !gotHappy || !gotSad {
+			t.Errorf("expected both happy and sad events, got happy=%v, sad=%v", gotHappy, gotSad)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for emotion.changed event from MCP call")
+		t.Fatalf("timeout waiting for emotion.changed events: happy=%v, sad=%v", gotHappy, gotSad)
 	}
 }
