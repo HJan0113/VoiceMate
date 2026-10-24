@@ -23,7 +23,7 @@ function getPttButtonText(state: ConnectionState, isRecording: boolean): string 
     return "芙宁娜说话中...";
   }
   if (state === "processing") {
-    return "正在思考...";
+    return "正在思考... (按住可打断)";
   }
   return "按住说话";
 }
@@ -148,7 +148,7 @@ export function ControlPanel({
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onClick={handleClick}
-              disabled={disabled || state === "speaking" || state === "processing"}
+              disabled={disabled || state === "speaking"}
               aria-label={isRecording ? "松开发送" : "开始输入"}
             >
               <span className="ptt-icon">{isRecording ? "🔴" : "🎙️"}</span>

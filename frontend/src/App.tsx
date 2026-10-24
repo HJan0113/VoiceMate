@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ChatLine,
   ConnectionState,
@@ -29,6 +29,25 @@ function App() {
   const turnId = useRef(`turn_${crypto.randomUUID()}`);
   const isRecordingRef = useRef(false);
   const mutedRef = useRef(false);
+  const processingTimerRef = useRef<number | null>(null);
+
+  const clearProcessingTimer = useCallback(() => {
+    if (processingTimerRef.current !== null) {
+      window.clearTimeout(processingTimerRef.current);
+      processingTimerRef.current = null;
+    }
+  }, []);
+
+  const startProcessingWatchdog = useCallback(() => {
+    clearProcessingTimer();
+    processingTimerRef.current = window.setTimeout(() => {
+      if (!isRecordingRef.current) {
+        client.interrupt();
+        setState("ready");
+        setNotice("未识别到有效语音或响应超时，按住按钮可重新说话");
+      }
+    }, 7000);
+  }, [clearProcessingTimer, client]);
 
   // 页面加载时自动连接服务
   useEffect(() => {
@@ -54,6 +73,7 @@ function App() {
 
   useEffect(() => {
     const releaseResources = () => {
+      clearProcessingTimer();
       isRecordingRef.current = false;
       microphone.stop();
       player.close();
@@ -64,7 +84,7 @@ function App() {
       window.removeEventListener("pagehide", releaseResources);
       releaseResources();
     };
-  }, [client, microphone, player]);
+  }, [clearProcessingTimer, client, microphone, player]);
 
   useEffect(() => {
     // 监听下行二进制 PCM 音频流
@@ -76,11 +96,13 @@ function App() {
 
     const unlistenEvents = client.on((event: ServerEvent) => {
       if (event.type === "session.ready") {
+        clearProcessingTimer();
         setState("ready");
         setError(null);
         setNotice("服务已就绪 · 按住下方按钮开始说话");
       }
       if (event.type === "turn.started" && isRecordingRef.current) {
+        clearProcessingTimer();
         setState("listening");
         setNotice("正在倾听你的声音... 松开发送");
       }
@@ -98,8 +120,10 @@ function App() {
         ]);
         setState("processing");
         setNotice("正在思考回复...");
+        startProcessingWatchdog();
       }
       if (event.type === "response.delta" && event.text) {
+        clearProcessingTimer();
         setState("speaking");
         setAssistantText((prev) => prev + event.text!);
         setLines((current) => {
@@ -121,12 +145,14 @@ function App() {
         });
       }
       if (event.type === "turn.completed" || event.type === "audio.end") {
+        clearProcessingTimer();
         if (!isRecordingRef.current) {
           setState("ready");
           setNotice("按住下方按钮开始说话");
         }
       }
       if (event.type === "connection.closed") {
+        clearProcessingTimer();
         isRecordingRef.current = false;
         microphone.stop();
         player.stop();
@@ -135,6 +161,7 @@ function App() {
         setNotice("连接断开");
       }
       if (event.type === "error") {
+        clearProcessingTimer();
         isRecordingRef.current = false;
         microphone.stop();
         player.stop();
@@ -152,7 +179,7 @@ function App() {
       unlistenAudio();
       unlistenEvents();
     };
-  }, [client, microphone, player]);
+  }, [clearProcessingTimer, client, microphone, player, startProcessingWatchdog]);
 
   // 连接服务（用于重试或手动开始）
   async function startSession() {
@@ -175,9 +202,13 @@ function App() {
   // 按住说话：按下开始录音采集并推流
   async function startVoice() {
     if (state !== "ready" && state !== "speaking" && state !== "processing") return;
+    clearProcessingTimer();
     setError(null);
     player.ensureContext();
     player.stop(); // 打断当前正在播放的声音
+    if (state === "processing" || state === "speaking") {
+      client.interrupt();
+    }
     setAssistantText("");
     isRecordingRef.current = true;
     turnId.current = `turn_${crypto.randomUUID()}`;
@@ -196,6 +227,7 @@ function App() {
       }
     } catch {
       if (isRecordingRef.current) {
+        clearProcessingTimer();
         isRecordingRef.current = false;
         microphone.stop();
         client.interrupt();
@@ -214,10 +246,12 @@ function App() {
     client.stopTurn();
     setState("processing");
     setNotice("正在思考与回复中...");
+    startProcessingWatchdog();
   }
 
   // 结束/重置会话
   function endSession() {
+    clearProcessingTimer();
     isRecordingRef.current = false;
     microphone.stop();
     player.stop();
@@ -234,7 +268,8 @@ function App() {
 
   // 发送文本
   function sendText(text: string) {
-    if (!text || state !== "ready") return;
+    if (!text || (state !== "ready" && state !== "processing")) return;
+    clearProcessingTimer();
     player.ensureContext();
     player.stop();
     setAssistantText("");
@@ -251,6 +286,7 @@ function App() {
     setState("processing");
     setNotice("正在思考与回复中...");
     client.sendText(text);
+    startProcessingWatchdog();
   }
 
   return (

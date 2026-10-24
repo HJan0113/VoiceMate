@@ -249,6 +249,11 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 					TurnID: active.turnID,
 					Text:   event.Text,
 				})
+			} else {
+				active.emit(provider.Event{
+					Type:   "turn.completed",
+					TurnID: active.turnID,
+				})
 			}
 		case "llm":
 			emotion := event.Emotion
@@ -290,6 +295,12 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 					TurnID: active.turnID,
 				})
 			}
+		case "error":
+			log.Printf("[Linx Provider] Linx reported error: %s", string(msg))
+			active.emit(provider.Event{
+				Type:   "turn.completed",
+				TurnID: active.turnID,
+			})
 		}
 	}
 }
@@ -309,12 +320,12 @@ func (p *Provider) Open(ctx context.Context, _ string, turnID string) (provider.
 	s := newStream(turnID, p)
 	p.stream = s
 
-	// 发送 listen: start
+	// 发送 listen: start（按住通话模式使用 manual）
 	startMsg := map[string]interface{}{
 		"session_id": p.sessionID,
 		"type":       "listen",
 		"state":      "start",
-		"mode":       "auto",
+		"mode":       "manual",
 	}
 	p.writeMu.Lock()
 	err := p.conn.WriteJSON(startMsg)
@@ -401,6 +412,19 @@ func (s *stream) Stop() {
 			"state":      "stop",
 		}
 		_ = s.provider.writeJSON(stopMsg)
+
+		// 启动安全看门狗：如果 8 秒内未收到云端任何响应（例如无有效语音），自动触发 turn.completed，避免前端卡死在思考状态
+		go func() {
+			select {
+			case <-s.cancel:
+				return
+			case <-time.After(8 * time.Second):
+				s.emit(provider.Event{
+					Type:   "turn.completed",
+					TurnID: s.turnID,
+				})
+			}
+		}()
 	})
 }
 
