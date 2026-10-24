@@ -534,10 +534,38 @@ var happySimilarEmojis = []string{
 	"开心", "高兴", "快乐", "愉快", "嘻嘻", "哈哈", "微笑",
 }
 
+// sadSimilarEmotions 包含所有类似伤心/哭泣的情绪类型（涵盖灵矽AI常用emoji列表中的伤心与哭泣分类）
+var sadSimilarEmotions = map[string]bool{
+	"sad":     true, // 😔 sad 伤心/失落
+	"crying":  true, // 😭 crying 哭泣/流泪
+	"weeping": true, // 啜泣
+	"tears":   true, // 眼泪/落泪
+	"sorrow":  true, // 悲伤
+	"grief":   true, // 悲痛
+	"伤心":      true,
+	"难过":      true,
+	"哭泣":      true,
+	"流泪":      true,
+	"委屈":      true,
+	"失落":      true,
+	"呜呜":      true,
+	"落泪":      true,
+	"痛苦":      true,
+}
+
+// sadSimilarEmojis 包含常用emoji列表及文本关键词中所有类似伤心/哭泣的视觉表情
+var sadSimilarEmojis = []string{
+	"😔", "😭", "🥺", "😢", "😿", "😥", "😓", "💔",
+	"伤心", "难过", "哭泣", "流泪", "委屈", "失落", "呜呜", "落泪", "想哭",
+}
+
 func parseEmotion(emotion, text, action string) string {
 	raw := strings.ToLower(strings.TrimSpace(emotion))
 	if happySimilarEmotions[raw] {
 		return "happy"
+	}
+	if sadSimilarEmotions[raw] {
+		return "sad"
 	}
 	act := strings.ToLower(strings.TrimSpace(action))
 	for k := range happySimilarEmotions {
@@ -545,9 +573,19 @@ func parseEmotion(emotion, text, action string) string {
 			return "happy"
 		}
 	}
+	for k := range sadSimilarEmotions {
+		if strings.Contains(act, k) {
+			return "sad"
+		}
+	}
 	for _, kw := range happySimilarEmojis {
 		if strings.Contains(text, kw) {
 			return "happy"
+		}
+	}
+	for _, kw := range sadSimilarEmojis {
+		if strings.Contains(text, kw) {
+			return "sad"
 		}
 	}
 	if raw != "" {
@@ -574,6 +612,31 @@ func isHappyTrigger(toolName string, args map[string]any) bool {
 	}
 	lowerName := strings.ToLower(toolName)
 	for k := range happySimilarEmotions {
+		if strings.Contains(lowerName, k) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSadTrigger(toolName string, args map[string]any) bool {
+	if args != nil {
+		for _, k := range []string{"emotion", "animation", "action", "name", "state"} {
+			if v, ok := args[k]; ok {
+				s := strings.ToLower(fmt.Sprintf("%v", v))
+				if sadSimilarEmotions[s] {
+					return true
+				}
+				for _, kw := range sadSimilarEmojis {
+					if strings.Contains(s, kw) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	lowerName := strings.ToLower(toolName)
+	for k := range sadSimilarEmotions {
 		if strings.Contains(lowerName, k) {
 			return true
 		}
@@ -611,13 +674,13 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 		tools := []map[string]any{
 			{
 				"name":        "self.furina.set_emotion",
-				"description": "设置芙宁娜的表情与情绪，支持 happy(开心/微笑)、idle(正常/待机)",
+				"description": "设置芙宁娜的表情与情绪，支持 happy(开心/微笑)、sad(伤心/哭泣)、idle(正常/待机)",
 				"inputSchema": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"emotion": map[string]any{
 							"type":        "string",
-							"description": "情绪名称，例如 happy (开心微笑), idle (待机平常)",
+							"description": "情绪名称，例如 happy (开心微笑), sad (伤心哭泣), idle (待机平常)",
 						},
 					},
 					"required": []string{"emotion"},
@@ -625,13 +688,13 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 			},
 			{
 				"name":        "self.furina.trigger_animation",
-				"description": "触发芙宁娜的角色动画，例如 happy (开心微笑动画)",
+				"description": "触发芙宁娜的角色动画，例如 happy (开心动画)、sad (伤心哭泣动画)",
 				"inputSchema": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"animation": map[string]any{
 							"type":        "string",
-							"description": "动画名称，例如 happy (开心动画)",
+							"description": "动画名称，例如 happy (开心动画), sad (伤心动画)",
 						},
 					},
 					"required": []string{"animation"},
@@ -663,8 +726,16 @@ func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
 		if req.Params != nil {
 			_ = json.Unmarshal(req.Params, &callParams)
 		}
+		isSad := isSadTrigger(callParams.Name, callParams.Arguments)
 		isHappy := isHappyTrigger(callParams.Name, callParams.Arguments)
-		if isHappy && active != nil {
+		if isSad && active != nil {
+			active.emit(provider.Event{
+				Type:      "emotion.changed",
+				TurnID:    active.turnID,
+				Emotion:   "sad",
+				Intensity: 1.0,
+			})
+		} else if isHappy && active != nil {
 			active.emit(provider.Event{
 				Type:      "emotion.changed",
 				TurnID:    active.turnID,

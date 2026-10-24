@@ -72,4 +72,36 @@ describe("FurinaCompanion", () => {
     expect(idleVideo.className).toContain("furina-video-hidden");
     expect(screen.getByTestId("furina-happy-badge")).not.toBeNull();
   });
+
+  it("switches to sad video and displays badge when emotion is sad", () => {
+    render(<FurinaCompanion state="speaking" emotion="sad" />);
+
+    const idleVideo = screen.getByTestId("furina-video-idle");
+    const happyVideo = screen.getByTestId("furina-video-happy");
+    const sadVideo = screen.getByTestId("furina-video-sad");
+
+    expect(sadVideo.className).toContain("furina-video-active");
+    expect(idleVideo.className).toContain("furina-video-hidden");
+    expect(happyVideo.className).toContain("furina-video-hidden");
+    expect(screen.getByTestId("furina-sad-badge")).not.toBeNull();
+    expect(screen.getByTestId("furina-sad-badge").textContent).toContain(
+      "伤心",
+    );
+  });
+
+  it.each(["crying", "伤心", "难过", "weeping", "tears", "哭泣", "委屈"])(
+    "switches to sad video when emotion is '%s'",
+    (simulatedEmotion) => {
+      render(<FurinaCompanion state="ready" emotion={simulatedEmotion} />);
+
+      const idleVideo = screen.getByTestId("furina-video-idle");
+      const happyVideo = screen.getByTestId("furina-video-happy");
+      const sadVideo = screen.getByTestId("furina-video-sad");
+
+      expect(sadVideo.className).toContain("furina-video-active");
+      expect(idleVideo.className).toContain("furina-video-hidden");
+      expect(happyVideo.className).toContain("furina-video-hidden");
+      expect(screen.getByTestId("furina-sad-badge")).not.toBeNull();
+    },
+  );
 });

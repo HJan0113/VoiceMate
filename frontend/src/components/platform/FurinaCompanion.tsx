@@ -15,29 +15,49 @@ export function FurinaCompanion({
 }: FurinaCompanionProps) {
   const idleVideoRef = useRef<HTMLVideoElement>(null);
   const happyVideoRef = useRef<HTMLVideoElement>(null);
+  const sadVideoRef = useRef<HTMLVideoElement>(null);
   const [pipActive, setPipActive] = useState(false);
 
-  const isHappy = emotion
+  const isSad = emotion
     ? [
-        "happy",
-        "loving",
-        "laughing",
-        "funny",
-        "winking",
-        "relaxed",
-        "delicious",
-        "kissy",
-        "confident",
-        "silly",
-        "cool",
-        "smile",
-        "开心",
-        "高兴",
-        "快乐",
-        "喜欢",
-        "得意",
+        "sad",
+        "crying",
+        "weeping",
+        "tears",
+        "sorrow",
+        "grief",
+        "伤心",
+        "难过",
+        "哭泣",
+        "流泪",
+        "委屈",
+        "失落",
+        "落泪",
       ].includes(emotion.toLowerCase())
     : false;
+
+  const isHappy =
+    !isSad && emotion
+      ? [
+          "happy",
+          "loving",
+          "laughing",
+          "funny",
+          "winking",
+          "relaxed",
+          "delicious",
+          "kissy",
+          "confident",
+          "silly",
+          "cool",
+          "smile",
+          "开心",
+          "高兴",
+          "快乐",
+          "喜欢",
+          "得意",
+        ].includes(emotion.toLowerCase())
+      : false;
 
   // 根据当前会话状态调节视频倍速
   useEffect(() => {
@@ -47,6 +67,9 @@ export function FurinaCompanion({
     }
     if (happyVideoRef.current) {
       happyVideoRef.current.playbackRate = rate;
+    }
+    if (sadVideoRef.current) {
+      sadVideoRef.current.playbackRate = rate;
     }
   }, [state]);
 
@@ -65,6 +88,21 @@ export function FurinaCompanion({
     }
   }, [isHappy]);
 
+  // 当伤心/哭泣触发时，从头开始播放伤心落泪动画并确保播放
+  useEffect(() => {
+    if (isSad && sadVideoRef.current) {
+      sadVideoRef.current.currentTime = 0;
+      const playVideo = async () => {
+        try {
+          await sadVideoRef.current?.play();
+        } catch {
+          // 忽略非用户手势导致自动播放策略受限
+        }
+      };
+      void playVideo();
+    }
+  }, [isSad]);
+
   // 计算当前展示的气泡台词
   const bubbleText = assistantText
     ? `「${assistantText}」`
@@ -72,7 +110,12 @@ export function FurinaCompanion({
 
   // 画中画模式
   const togglePip = async () => {
-    const video = isHappy ? happyVideoRef.current : idleVideoRef.current;
+    let video = idleVideoRef.current;
+    if (isSad) {
+      video = sadVideoRef.current;
+    } else if (isHappy) {
+      video = happyVideoRef.current;
+    }
     if (!video) return;
     try {
       if (document.pictureInPictureElement) {
@@ -95,6 +138,14 @@ export function FurinaCompanion({
           <h2 className="furina-name">芙宁娜 (Furina)</h2>
         </div>
         <div className="furina-badge-group">
+          {isSad && (
+            <span
+              className="furina-emotion-tag sad"
+              data-testid="furina-sad-badge"
+            >
+              😢 伤心
+            </span>
+          )}
           {isHappy && (
             <span
               className="furina-emotion-tag happy"
@@ -119,7 +170,7 @@ export function FurinaCompanion({
         <video
           ref={idleVideoRef}
           src="/assets/characters/furina/furina_idle.mp4"
-          className={`furina-video ${isHappy ? "furina-video-hidden" : "furina-video-active"}`}
+          className={`furina-video ${!isHappy && !isSad ? "furina-video-active" : "furina-video-hidden"}`}
           autoPlay
           loop
           muted
@@ -139,6 +190,19 @@ export function FurinaCompanion({
           playsInline
           aria-label="芙宁娜开心微笑动画"
           data-testid="furina-video-happy"
+        />
+
+        {/* 伤心落泪动画 */}
+        <video
+          ref={sadVideoRef}
+          src="/assets/characters/furina/furina_sad.mp4"
+          className={`furina-video ${isSad ? "furina-video-active" : "furina-video-hidden"}`}
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-label="芙宁娜伤心落泪动画"
+          data-testid="furina-video-sad"
         />
 
         {/* 动态台词气泡 */}
