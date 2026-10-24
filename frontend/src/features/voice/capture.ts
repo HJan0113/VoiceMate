@@ -32,20 +32,26 @@ export class MicrophoneCapture {
       return;
     }
     this.stream = stream;
-    this.context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
-    await this.context.resume();
-    this.source = this.context.createMediaStreamSource(this.stream);
-    this.processor = this.context.createScriptProcessor(1024, 1, 1);
-    this.processor.onaudioprocess = (event) => {
-      if (!this.active) return;
-      const samples = resampleTo16k(
-        event.inputBuffer.getChannelData(0),
-        event.inputBuffer.sampleRate,
-      );
-      onFrame(toPcm16(samples));
-    };
-    this.source.connect(this.processor);
-    this.processor.connect(this.context.destination);
+    try {
+      this.context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+      await this.context.resume();
+      this.source = this.context.createMediaStreamSource(this.stream);
+      this.processor = this.context.createScriptProcessor(1024, 1, 1);
+      this.processor.onaudioprocess = (event) => {
+        if (!this.active) return;
+        const samples = resampleTo16k(
+          event.inputBuffer.getChannelData(0),
+          event.inputBuffer.sampleRate,
+        );
+        onFrame(toPcm16(samples));
+      };
+      this.source.connect(this.processor);
+      this.processor.connect(this.context.destination);
+    } catch (error) {
+      // 初始化音频上下文失败时回收已经取得的麦克风资源。
+      this.stop();
+      throw error;
+    }
   }
 
   stop(): void {
