@@ -10,8 +10,8 @@ import (
 	"log"
 	"net/http"
 	"regexp"
-	"sync"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -491,7 +491,6 @@ func (s *stream) emitAudio(chunk []byte) {
 		Audio:      chunk,
 	})
 }
-
 
 type mcpRPCMessage struct {
 	Type    string `json:"type"`

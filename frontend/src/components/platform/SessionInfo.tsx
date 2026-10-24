@@ -4,13 +4,20 @@ import { getStatusLabel } from "./StatusBadge";
 type SessionInfoProps = {
   state: ConnectionState;
   sessionId?: string;
+  emotion?: string;
+  muted?: boolean;
 };
 
-export function SessionInfo({ state, sessionId }: SessionInfoProps) {
+export function SessionInfo({
+  state,
+  sessionId,
+  emotion = "neutral",
+  muted = false,
+}: SessionInfoProps) {
   return (
     <section className="session-info" aria-label="会话信息">
-      <div>
-        <p className="panel-label">SESSION</p>
+      <div className="session-info-primary">
+        <p className="panel-label">SESSION STATUS</p>
         <h2>{getStatusLabel(state)}</h2>
       </div>
       <dl className="session-meta">
@@ -19,8 +26,16 @@ export function SessionInfo({ state, sessionId }: SessionInfoProps) {
           <dd>{getStatusLabel(state)}</dd>
         </div>
         <div>
+          <dt>情绪</dt>
+          <dd>{emotion}</dd>
+        </div>
+        <div>
+          <dt>音频</dt>
+          <dd>{muted ? "已静音" : "正常"}</dd>
+        </div>
+        <div>
           <dt>ID</dt>
-          <dd>{sessionId ?? "—"}</dd>
+          <dd title={sessionId}>{sessionId ?? "—"}</dd>
         </div>
       </dl>
     </section>
