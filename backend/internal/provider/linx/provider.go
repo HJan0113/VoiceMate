@@ -351,21 +351,27 @@ func (p *Provider) Open(ctx context.Context, _ string, turnID string) (provider.
 }
 
 func (p *Provider) writeBinary(data []byte) error {
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	if p.conn == nil {
+	p.mu.Lock()
+	conn := p.conn
+	p.mu.Unlock()
+	if conn == nil {
 		return errors.New("linx connection lost")
 	}
-	return p.conn.WriteMessage(websocket.BinaryMessage, data)
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+	return conn.WriteMessage(websocket.BinaryMessage, data)
 }
 
 func (p *Provider) writeJSON(val any) error {
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	if p.conn == nil {
+	p.mu.Lock()
+	conn := p.conn
+	p.mu.Unlock()
+	if conn == nil {
 		return errors.New("linx connection lost")
 	}
-	return p.conn.WriteJSON(val)
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+	return conn.WriteJSON(val)
 }
 
 type stream struct {
