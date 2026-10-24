@@ -1,0 +1,45 @@
+name: Proposal
+description: 架构演进、核心模块重构、协议设计或技术选型提案
+title: "[Proposal]: "
+labels: ["proposal"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 提案领域
+      options:
+        - architecture
+        - protocol
+        - backend
+        - frontend
+        - engineering
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 动机与现状
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: 设计方案
+    validations:
+      required: true
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: 备选方案与取舍
+    validations:
+      required: true
+
+  - type: textarea
+    id: migration_plan
+    attributes:
+      label: 迁移与兼容性影响
+    validations:
+      required: false

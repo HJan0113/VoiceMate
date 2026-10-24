@@ -1,0 +1,57 @@
+name: Bug
+description: 功能异常、崩溃或协议不一致
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响模块
+      options:
+        - frontend
+        - backend
+        - api
+        - fullstack
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_and_actual
+    attributes:
+      label: 预期与实际行为
+      description: 附上关键报错、状态码或日志
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      placeholder: "macOS 15 / Chrome 130 / Go 1.24 / Node 24"
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+    validations:
+      required: false

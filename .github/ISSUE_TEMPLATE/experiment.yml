@@ -1,0 +1,39 @@
+name: Experiment
+description: 模型接入对比、音频算法调优、性能基准测试或 PoC 验证
+title: "[Experiment]: "
+labels: ["experiment"]
+body:
+  - type: dropdown
+    id: domain
+    attributes:
+      label: 实验方向
+      options:
+        - ai-provider
+        - audio-pipeline
+        - performance
+        - ux-prototype
+    validations:
+      required: true
+
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: 实验假设与目标
+    validations:
+      required: true
+
+  - type: textarea
+    id: methodology
+    attributes:
+      label: 方法与评估指标
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: 预期产出与判定标准
+      value: |
+        - [ ] 
+    validations:
+      required: true

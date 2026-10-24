@@ -1,0 +1,38 @@
+name: CI/CD
+description: GitHub Actions、Git Hooks、Lint/Format 或构建发布流程变更
+title: "[CI/CD]: "
+labels: ["ci/cd"]
+body:
+  - type: dropdown
+    id: target
+    attributes:
+      label: 目标范围
+      options:
+        - github-actions
+        - git-hooks
+        - linter-formatter
+        - build-release
+        - repo-automation
+    validations:
+      required: true
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: 背景与目标
+    validations:
+      required: true
+
+  - type: textarea
+    id: changes
+    attributes:
+      label: 改动内容
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: 验证方式
+    validations:
+      required: true
