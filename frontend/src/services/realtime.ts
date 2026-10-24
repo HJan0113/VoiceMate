@@ -13,6 +13,8 @@ export class RealtimeClient {
   }
 
   connect(wsUrl: string, token: string): Promise<void> {
+    // 连接前关闭旧 socket，确保重试不会留下并行连接。
+    this.close();
     const url = new URL(wsUrl, window.location.origin);
     if (url.protocol === "http:") url.protocol = "ws:";
     if (url.protocol === "https:") url.protocol = "wss:";
@@ -20,20 +22,30 @@ export class RealtimeClient {
       const socket = new WebSocket(url);
       this.socket = socket;
       socket.binaryType = "arraybuffer";
+      let opened = false;
       socket.onopen = () => {
         socket.send(
           JSON.stringify({ type: "auth", token, protocolVersion: 1 }),
         );
+        opened = true;
         resolve();
       };
-      socket.onerror = () => reject(new Error("实时连接失败"));
+      socket.onerror = () => {
+        if (!opened) reject(new Error("实时连接失败"));
+      };
       socket.onmessage = (message) => {
-        if (typeof message.data === "string")
+        if (typeof message.data !== "string") return;
+        try {
           this.emit(JSON.parse(message.data) as ServerEvent);
+        } catch {
+          this.emit({ type: "error", code: "INVALID_SERVER_MESSAGE" });
+        }
       };
       socket.onclose = () => {
+        if (this.socket !== socket) return;
         this.socket = null;
-        this.emit({ type: "connection.closed" });
+        if (opened) this.emit({ type: "connection.closed" });
+        else reject(new Error("实时连接失败"));
       };
     });
   }
@@ -64,8 +76,12 @@ export class RealtimeClient {
   }
 
   close(): void {
-    this.socket?.close();
+    const socket = this.socket;
     this.socket = null;
+    if (!socket) return;
+    socket.onclose = null;
+    socket.onerror = null;
+    socket.close();
   }
   private send(value: object): void {
     if (this.socket?.readyState === WebSocket.OPEN)

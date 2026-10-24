@@ -164,6 +164,12 @@ paths:
       responses:
         '101':
           description: WebSocket protocol upgrade
+        '400':
+          description: Missing sessionId query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       x-websocket:
         version: 1
         authentication:

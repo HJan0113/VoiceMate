@@ -3,6 +3,7 @@ package domain
 import "time"
 
 type Character struct {
+	// TODO: 这些兼容字段属于现有业务接口，平台底座暂不扩展其语义。
 	ID              string                    `json:"id"`
 	Slug            string                    `json:"slug"`
 	DisplayName     string                    `json:"displayName"`

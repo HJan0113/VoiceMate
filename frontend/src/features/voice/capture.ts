@@ -5,26 +5,36 @@ type FrameHandler = (frame: ArrayBuffer) => void;
 export class MicrophoneCapture {
   private context: AudioContext | null = null;
   private stream: MediaStream | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
   private active = false;
 
   async start(onFrame: FrameHandler): Promise<void> {
+    // 新一轮采集开始前先清理旧上下文，处理快速重试造成的竞态。
+    this.stop();
     this.active = true;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        sampleRate: TARGET_SAMPLE_RATE,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: TARGET_SAMPLE_RATE,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+    } catch (error) {
+      this.active = false;
+      throw error;
+    }
     if (!this.active) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
     this.stream = stream;
     this.context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
-    const source = this.context.createMediaStreamSource(this.stream);
+    await this.context.resume();
+    this.source = this.context.createMediaStreamSource(this.stream);
     this.processor = this.context.createScriptProcessor(1024, 1, 1);
     this.processor.onaudioprocess = (event) => {
       if (!this.active) return;
@@ -34,16 +44,18 @@ export class MicrophoneCapture {
       );
       onFrame(toPcm16(samples));
     };
-    source.connect(this.processor);
+    this.source.connect(this.processor);
     this.processor.connect(this.context.destination);
   }
 
   stop(): void {
     this.active = false;
+    this.source?.disconnect();
     this.processor?.disconnect();
     this.stream?.getTracks().forEach((track) => track.stop());
     void this.context?.close();
     this.processor = null;
+    this.source = null;
     this.stream = null;
     this.context = null;
   }

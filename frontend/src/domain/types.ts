@@ -39,6 +39,8 @@ export type AudioFormat = {
 
 export type ServerEvent = {
   type: string;
+  code?: string;
+  retryable?: boolean;
   sessionId?: string;
   turnId?: string;
   streamId?: number;

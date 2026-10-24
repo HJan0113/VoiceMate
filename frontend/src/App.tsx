@@ -26,11 +26,17 @@ function App() {
   const mutedRef = useRef(false);
 
   useEffect(() => {
-    return () => {
+    const releaseResources = () => {
+      // 页面切换或卸载时主动释放浏览器资源，避免麦克风继续占用。
       pressing.current = false;
       turnActive.current = false;
       microphone.stop();
       client.close();
+    };
+    window.addEventListener("pagehide", releaseResources);
+    return () => {
+      window.removeEventListener("pagehide", releaseResources);
+      releaseResources();
     };
   }, [client, microphone]);
 
@@ -98,7 +104,11 @@ function App() {
           turnActive.current = false;
           microphone.stop();
           setState("error");
-          setError("实时服务返回错误，请重试");
+          setError(
+            event.code
+              ? `实时服务错误（${event.code}），请重试`
+              : "实时服务返回错误，请重试",
+          );
           setNotice("连接异常");
         }
       }),
@@ -108,6 +118,7 @@ function App() {
   async function startSession() {
     if (state !== "idle" && state !== "error") return;
     setError(null);
+    client.close();
     setState("connecting");
     setNotice("正在建立实时会话…");
     try {
@@ -133,8 +144,14 @@ function App() {
       await microphone.start((frame) => {
         if (pressing.current && !mutedRef.current) client.sendAudio(frame);
       });
+      if (!pressing.current) microphone.stop();
     } catch {
       if (pressing.current) {
+        pressing.current = false;
+        turnActive.current = false;
+        microphone.stop();
+        client.interrupt();
+        setState("ready");
         setError("无法访问麦克风，请检查浏览器权限");
         setNotice("麦克风不可用");
       }
@@ -158,6 +175,7 @@ function App() {
     pressing.current = false;
     turnActive.current = false;
     microphone.stop();
+    client.interrupt();
     client.close();
     setSession(null);
     mutedRef.current = false;
