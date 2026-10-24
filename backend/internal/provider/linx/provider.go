@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -232,6 +233,7 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 			State     string `json:"state,omitempty"`
 			Text      string `json:"text,omitempty"`
 			Emotion   string `json:"emotion,omitempty"`
+			Action    string `json:"action,omitempty"`
 		}
 		if err := json.Unmarshal(msg, &event); err != nil {
 			continue
@@ -241,6 +243,11 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 			p.mu.Lock()
 			p.sessionID = event.SessionID
 			p.mu.Unlock()
+			continue
+		}
+
+		if event.Type == "mcp" {
+			p.handleMCPMessage(msg, active)
 			continue
 		}
 
@@ -263,10 +270,7 @@ func (p *Provider) readLoop(conn *websocket.Conn) {
 				})
 			}
 		case "llm":
-			emotion := event.Emotion
-			if emotion == "" {
-				emotion = "happy"
-			}
+			emotion := parseEmotion(event.Emotion, event.Text, event.Action)
 			active.emit(provider.Event{
 				Type:      "emotion.changed",
 				TurnID:    active.turnID,
@@ -484,4 +488,218 @@ func (s *stream) emitAudio(chunk []byte) {
 		Sequence:   seq,
 		Audio:      chunk,
 	})
+}
+
+
+type mcpRPCMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		JSONRPC string          `json:"jsonrpc"`
+		Method  string          `json:"method"`
+		ID      any             `json:"id"`
+		Params  json.RawMessage `json:"params,omitempty"`
+	} `json:"payload"`
+}
+
+type mcpToolCallParams struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments,omitempty"`
+}
+
+// happySimilarEmotions 包含所有类似开心的情绪类型（涵盖灵矽AI常用emoji列表中的类似开心分类）
+var happySimilarEmotions = map[string]bool{
+	"happy":     true, // 🙂 happy 开心
+	"loving":    true, // 😍 loving 喜爱/宠溺
+	"laughing":  true, // 😆 laughing 欢笑
+	"funny":     true, // 😂 funny 搞笑逗趣
+	"winking":   true, // 😉 winking 俏皮眨眼
+	"relaxed":   true, // 😌 relaxed 放松从容
+	"delicious": true, // 🤤 delicious 垂涎喜悦
+	"kissy":     true, // 😘 kissy 亲吻喜爱
+	"confident": true, // 😏 confident 得意自信
+	"silly":     true, // 😜 silly 调皮搞怪
+	"cool":      true, // 😎 cool 帅气得意
+	"smile":     true, // 微笑
+	"开心":        true,
+	"高兴":        true,
+	"快乐":        true,
+	"喜欢":        true,
+	"得意":        true,
+}
+
+// happySimilarEmojis 包含常用emoji列表及文本关键词中所有类似开心的视觉表情
+var happySimilarEmojis = []string{
+	"🙂", "😍", "😆", "😂", "😉", "😌", "🤤", "😘", "😏", "😜", "😎",
+	"😊", "🥰", "😄", "😁", "😀", "🥳", "✨",
+	"开心", "高兴", "快乐", "愉快", "嘻嘻", "哈哈", "微笑",
+}
+
+func parseEmotion(emotion, text, action string) string {
+	raw := strings.ToLower(strings.TrimSpace(emotion))
+	if happySimilarEmotions[raw] {
+		return "happy"
+	}
+	act := strings.ToLower(strings.TrimSpace(action))
+	for k := range happySimilarEmotions {
+		if strings.Contains(act, k) {
+			return "happy"
+		}
+	}
+	for _, kw := range happySimilarEmojis {
+		if strings.Contains(text, kw) {
+			return "happy"
+		}
+	}
+	if raw != "" {
+		return raw
+	}
+	return "idle"
+}
+
+func isHappyTrigger(toolName string, args map[string]any) bool {
+	if args != nil {
+		for _, k := range []string{"emotion", "animation", "action", "name", "state"} {
+			if v, ok := args[k]; ok {
+				s := strings.ToLower(fmt.Sprintf("%v", v))
+				if happySimilarEmotions[s] {
+					return true
+				}
+				for _, kw := range happySimilarEmojis {
+					if strings.Contains(s, kw) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	lowerName := strings.ToLower(toolName)
+	for k := range happySimilarEmotions {
+		if strings.Contains(lowerName, k) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Provider) handleMCPMessage(msg []byte, active *stream) {
+	var mcpMsg mcpRPCMessage
+	if err := json.Unmarshal(msg, &mcpMsg); err != nil {
+		return
+	}
+	req := mcpMsg.Payload
+	switch req.Method {
+	case "initialize":
+		resp := map[string]any{
+			"type": "mcp",
+			"payload": map[string]any{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"result": map[string]any{
+					"protocolVersion": "2024-11-05",
+					"capabilities": map[string]any{
+						"tools": map[string]any{},
+					},
+					"serverInfo": map[string]any{
+						"name":    "FurinaCompanion",
+						"version": "1.0.0",
+					},
+				},
+			},
+		}
+		_ = p.writeJSON(resp)
+	case "tools/list":
+		tools := []map[string]any{
+			{
+				"name":        "self.furina.set_emotion",
+				"description": "设置芙宁娜的表情与情绪，支持 happy(开心/微笑)、idle(正常/待机)",
+				"inputSchema": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"emotion": map[string]any{
+							"type":        "string",
+							"description": "情绪名称，例如 happy (开心微笑), idle (待机平常)",
+						},
+					},
+					"required": []string{"emotion"},
+				},
+			},
+			{
+				"name":        "self.furina.trigger_animation",
+				"description": "触发芙宁娜的角色动画，例如 happy (开心微笑动画)",
+				"inputSchema": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"animation": map[string]any{
+							"type":        "string",
+							"description": "动画名称，例如 happy (开心动画)",
+						},
+					},
+					"required": []string{"animation"},
+				},
+			},
+			{
+				"name":        "self.get_device_status",
+				"description": "获取设备及芙宁娜伴侣的当前运行状态",
+				"inputSchema": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		}
+		resp := map[string]any{
+			"type": "mcp",
+			"payload": map[string]any{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"result": map[string]any{
+					"tools":      tools,
+					"nextCursor": nil,
+				},
+			},
+		}
+		_ = p.writeJSON(resp)
+	case "tools/call":
+		var callParams mcpToolCallParams
+		if req.Params != nil {
+			_ = json.Unmarshal(req.Params, &callParams)
+		}
+		isHappy := isHappyTrigger(callParams.Name, callParams.Arguments)
+		if isHappy && active != nil {
+			active.emit(provider.Event{
+				Type:      "emotion.changed",
+				TurnID:    active.turnID,
+				Emotion:   "happy",
+				Intensity: 1.0,
+			})
+		}
+		resp := map[string]any{
+			"type": "mcp",
+			"payload": map[string]any{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"result": map[string]any{
+					"content": []map[string]any{
+						{
+							"type": "text",
+							"text": "执行成功",
+						},
+					},
+					"isError": false,
+				},
+			},
+		}
+		_ = p.writeJSON(resp)
+	default:
+		if req.ID != nil {
+			resp := map[string]any{
+				"type": "mcp",
+				"payload": map[string]any{
+					"jsonrpc": "2.0",
+					"id":      req.ID,
+					"result":  map[string]any{},
+				},
+			}
+			_ = p.writeJSON(resp)
+		}
+	}
 }
