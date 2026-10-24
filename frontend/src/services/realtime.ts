@@ -1,15 +1,22 @@
 import type { ServerEvent } from "../domain/types";
 
 type Listener = (event: ServerEvent) => void;
+type AudioChunkListener = (chunk: ArrayBuffer) => void;
 
 export class RealtimeClient {
   private socket: WebSocket | null = null;
   private readonly listeners = new Set<Listener>();
+  private readonly audioListeners = new Set<AudioChunkListener>();
   private sequence = 0;
 
   on(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  onAudio(listener: AudioChunkListener): () => void {
+    this.audioListeners.add(listener);
+    return () => this.audioListeners.delete(listener);
   }
 
   connect(wsUrl: string, token: string): Promise<void> {
@@ -36,11 +43,21 @@ export class RealtimeClient {
         if (!opened) reject(new Error("实时连接失败"));
       };
       socket.onmessage = (message) => {
-        if (this.socket !== socket || typeof message.data !== "string") return;
-        try {
-          this.emit(JSON.parse(message.data) as ServerEvent);
-        } catch {
-          this.emit({ type: "error", code: "INVALID_SERVER_MESSAGE" });
+        if (this.socket !== socket) return;
+        if (typeof message.data === "string") {
+          try {
+            this.emit(JSON.parse(message.data) as ServerEvent);
+          } catch {
+            this.emit({ type: "error", code: "INVALID_SERVER_MESSAGE" });
+          }
+          return;
+        }
+        if (message.data instanceof ArrayBuffer) {
+          // VoiceMate 二进制下行音频帧包含 16 字节报头
+          if (message.data.byteLength > 16) {
+            const pcmPayload = message.data.slice(16);
+            this.audioListeners.forEach((listener) => listener(pcmPayload));
+          }
         }
       };
       socket.onclose = () => {

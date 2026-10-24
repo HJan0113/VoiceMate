@@ -7,6 +7,7 @@ import type {
 } from "./domain/types";
 import { PlatformLayout } from "./components/platform/PlatformLayout";
 import { MicrophoneCapture } from "./features/voice/capture";
+import { PcmStreamPlayer } from "./features/voice/player";
 import { createSession } from "./services/api";
 import { RealtimeClient } from "./services/realtime";
 import "./App.css";
@@ -18,8 +19,13 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [lines, setLines] = useState<ChatLine[]>([]);
   const [muted, setMuted] = useState(false);
+  const [emotion, setEmotion] = useState<string>("neutral");
+  const [assistantText, setAssistantText] = useState<string>("");
+
   const client = useMemo(() => new RealtimeClient(), []);
   const microphone = useMemo(() => new MicrophoneCapture(), []);
+  const player = useMemo(() => new PcmStreamPlayer(16000), []);
+
   const turnId = useRef(`turn_${crypto.randomUUID()}`);
   const pressing = useRef(false);
   const turnActive = useRef(false);
@@ -31,6 +37,7 @@ function App() {
       pressing.current = false;
       turnActive.current = false;
       microphone.stop();
+      player.close();
       client.close();
     };
     window.addEventListener("pagehide", releaseResources);
@@ -38,87 +45,104 @@ function App() {
       window.removeEventListener("pagehide", releaseResources);
       releaseResources();
     };
-  }, [client, microphone]);
+  }, [client, microphone, player]);
 
-  useEffect(
-    () =>
-      client.on((event: ServerEvent) => {
-        if (event.type === "session.ready") {
-          setState("ready");
-          setError(null);
-          setNotice("连接已建立，按住按钮开始输入");
-        }
-        if (event.type === "turn.started" && pressing.current) {
-          setState("listening");
-          setNotice("正在接收输入…");
-        }
-        if (event.type === "transcript.final" && event.text) {
-          setLines((current) => [
+  useEffect(() => {
+    // 监听下行二进制 PCM 音频流
+    const unlistenAudio = client.onAudio((chunk) => {
+      if (!mutedRef.current) {
+        player.feed(chunk);
+      }
+    });
+
+    const unlistenEvents = client.on((event: ServerEvent) => {
+      if (event.type === "session.ready") {
+        setState("ready");
+        setError(null);
+        setNotice("连接已建立，按住按钮开始输入");
+      }
+      if (event.type === "turn.started" && pressing.current) {
+        setState("listening");
+        setNotice("正在接收输入…");
+      }
+      if (event.type === "emotion.changed" && event.emotion) {
+        setEmotion(event.emotion);
+      }
+      if (event.type === "transcript.final" && event.text) {
+        setLines((current) => [
+          ...current,
+          {
+            id: `${event.turnId ?? turnId.current}-user`,
+            role: "user",
+            text: event.text!,
+            turnId: event.turnId,
+          },
+        ]);
+        setState("processing");
+      }
+      if (event.type === "response.delta" && event.text) {
+        setState("speaking");
+        setAssistantText((prev) => prev + event.text!);
+        setLines((current) => {
+          const targetTurnId = event.turnId ?? turnId.current;
+          const last = current.at(-1);
+          if (last?.role === "assistant" && last.turnId === targetTurnId) {
+            return [
+              ...current.slice(0, -1),
+              { ...last, text: `${last.text}${event.text}` },
+            ];
+          }
+          return [
             ...current,
             {
-              id: `${event.turnId ?? turnId.current}-user`,
-              role: "user",
+              id: `${targetTurnId}-assistant`,
+              role: "assistant",
               text: event.text!,
-              turnId: event.turnId,
+              turnId: targetTurnId,
             },
-          ]);
-          setState("processing");
-        }
-        if (event.type === "response.delta" && event.text) {
-          setState("speaking");
-          setLines((current) => {
-            const targetTurnId = event.turnId ?? turnId.current;
-            const last = current.at(-1);
-            if (last?.role === "assistant" && last.turnId === targetTurnId) {
-              return [
-                ...current.slice(0, -1),
-                { ...last, text: `${last.text}${event.text}` },
-              ];
-            }
-            return [
-              ...current,
-              {
-                id: `${targetTurnId}-assistant`,
-                role: "assistant",
-                text: event.text!,
-                turnId: targetTurnId,
-              },
-            ];
-          });
-        }
-        if (event.type === "turn.completed" || event.type === "audio.end") {
-          turnActive.current = false;
-          setState("ready");
-          setNotice("本轮完成，可以继续输入");
-        }
-        if (event.type === "connection.closed") {
-          pressing.current = false;
-          turnActive.current = false;
-          microphone.stop();
-          setState("error");
-          setError("实时连接已断开，请重试");
-          setNotice("连接异常");
-        }
-        if (event.type === "error") {
-          pressing.current = false;
-          turnActive.current = false;
-          microphone.stop();
-          setState("error");
-          setError(
-            event.code
-              ? `实时服务错误（${event.code}），请重试`
-              : "实时服务返回错误，请重试",
-          );
-          setNotice("连接异常");
-        }
-      }),
-    [client, microphone],
-  );
+          ];
+        });
+      }
+      if (event.type === "turn.completed" || event.type === "audio.end") {
+        turnActive.current = false;
+        setState("ready");
+        setNotice("本轮完成，可以继续输入");
+      }
+      if (event.type === "connection.closed") {
+        pressing.current = false;
+        turnActive.current = false;
+        microphone.stop();
+        player.stop();
+        setState("error");
+        setError("实时连接已断开，请重试");
+        setNotice("连接异常");
+      }
+      if (event.type === "error") {
+        pressing.current = false;
+        turnActive.current = false;
+        microphone.stop();
+        player.stop();
+        setState("error");
+        setError(
+          event.code
+            ? `实时服务错误（${event.code}），请重试`
+            : "实时服务返回错误，请重试",
+        );
+        setNotice("连接异常");
+      }
+    });
+
+    return () => {
+      unlistenAudio();
+      unlistenEvents();
+    };
+  }, [client, microphone, player]);
 
   async function startSession() {
     if (state !== "idle" && state !== "error") return;
     setError(null);
     client.close();
+    player.ensureContext();
     setState("connecting");
     setNotice("正在建立实时会话…");
     try {
@@ -134,6 +158,9 @@ function App() {
 
   async function startInput() {
     if (state !== "ready") return;
+    player.ensureContext();
+    player.stop(); // 打断当前正在播放的语音
+    setAssistantText("");
     pressing.current = true;
     turnActive.current = true;
     turnId.current = `turn_${crypto.randomUUID()}`;
@@ -175,11 +202,13 @@ function App() {
     pressing.current = false;
     turnActive.current = false;
     microphone.stop();
+    player.stop();
     client.interrupt();
     client.close();
     setSession(null);
     mutedRef.current = false;
     setMuted(false);
+    setAssistantText("");
     setState("idle");
     setError(null);
     setNotice("会话已结束，可以重新开始");
@@ -194,6 +223,8 @@ function App() {
       lines={lines}
       disabled={state === "connecting"}
       muted={muted}
+      emotion={emotion}
+      assistantText={assistantText}
       onSessionAction={() => void startSession()}
       onEndSession={endSession}
       onInputAction={
@@ -202,6 +233,7 @@ function App() {
       onToggleMute={() => {
         mutedRef.current = !mutedRef.current;
         setMuted(mutedRef.current);
+        player.setMuted(mutedRef.current);
       }}
     />
   );
