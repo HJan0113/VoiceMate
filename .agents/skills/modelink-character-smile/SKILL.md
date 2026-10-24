@@ -1,26 +1,26 @@
 ---
 name: modelink-character-smile
 description: >-
-  七牛云 Modelink (api.qnaigc.com / api.modelink.ai) 角色情绪微笑微启微动生产管线技能。
-  适用于制作二次元看板娘/桌面伴侣的「情绪交互/高兴微笑状态 (Smile / Happy State)」，
-  严格遵循「可灵 o3 首尾闭环 -> 原速截取前 1.5s~2.0s -> Gradient Anchor Lock 双脚绝对静止锁定 -> 尾帧余弦平滑闭环 -> FFmpeg CAS 锐化」标准工业工作流，
+  角色情绪微笑微启微动生产管线技能。
+  适用于制作 Web 二次元角色与桌面虚拟伴侣的「情绪交互/高兴微笑状态 (Smile / Happy State)」，
+  包含可灵首尾闭环、1.0x 原速截取、Gradient Anchor Lock 下半身绝对静止锁定、尾帧余弦平滑闭环与 CAS 锐化压制标准工业流程，
   彻底解决五官融化拉扯、双脚漂移移步以及倍速动作机械急促等工业痛点。
 ---
 
 # 角色情绪微笑微启微动管线：锁机位 + 原速截取 + 脚部锚定 + 平滑闭环 (modelink-character-smile)
 
-本 Skill 专门固化了制作 Web 二次元角色/桌面伴侣**情绪微笑微启状态 (Smile / Happy State)** 的工业级全流程生产规范：
-* **核心目标**：生成神态自然生动（浅笑 ➔ 轻启微语 ➔ 柔和闭唇）、双脚站立如松绝不移步滑移、原速舒展从容、无限循环无缝顺畅的高清伴侣视频（如 `furina_happy.mp4`）；
+本 Skill 专门固化了制作 Web 二次元角色与桌面虚拟伴侣**情绪微笑微启状态 (Smile / Happy State)** 的工业级全流程生产规范：
+* **核心目标**：生成神态自然生动（浅笑 ➔ 轻启微语 ➔ 柔和闭唇）、双脚站立如松绝不移步滑移、原速舒展从容、无限循环无缝顺畅的高清伴侣视频（如 `character_smile.mp4`）；
 * **核心方案**：可灵 o3 首尾闭环 + 原速截取前 1.5s~2.0s（不加速） + 下半身双脚梯度锚定（Gradient Anchor Lock） + 尾帧余弦平滑闭环 + FFmpeg CAS 锐化。
 
 ---
 
-## 1. 核心端点与凭证
+## 1. 核心端点与凭证规范
 
 * **服务接入点 (BaseURL)**：
   * 中国大陆环境：`https://api.qnaigc.com`
   * 海外/跨境环境：`https://api.modelink.ai`
-* **鉴权 Header**：`Authorization: Bearer <API_KEY>`
+* **鉴权 Header**：`Authorization: Bearer <YOUR_API_KEY>`
 * **推荐选用模型**：`kling-video/o3/standard/image-to-video`（下半身站姿先验最稳，无 v3 版本的剧烈挪步问题）
 
 ---
@@ -56,7 +56,7 @@ description: >-
 
 ## 3. 阶段一：输入图预处理规范
 
-为避免 AI 视频网关在上传大体积 Base64 时报 `ReadTimeout` 或 `ssl.SSLError: decryption failed or bad record mac`，输入图片提交前**必须**用 Pillow 转为 90% 质量 JPEG（体积压至 100~150KB）：
+为避免 AI 视频网关在上传大体积 Base64 时报 `ReadTimeout` 或 SSL 解密错误，输入图片提交前**必须**用 Pillow 转为 90% 质量 JPEG（体积压至 100~150KB）：
 
 ```python
 import io, base64
@@ -128,11 +128,14 @@ from pathlib import Path
 from PIL import Image
 import imageio_ffmpeg
 
-API_KEY = os.getenv("MODELINK_API_KEY", "your_key_here")
+API_KEY = os.getenv("MODELINK_API_KEY", "")
 ENDPOINT = "https://api.qnaigc.com/queue/fal-ai/kling-video/o3/standard/image-to-video"
 HEADERS = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
 def make_smile_video(image_path: str, output_mp4: str, cut_duration: float = 2.0):
+    if not API_KEY:
+        raise ValueError("请设置环境变量 MODELINK_API_KEY")
+
     # 1. 预处理原图至 <150KB JPEG
     from io import BytesIO
     import base64
@@ -186,20 +189,21 @@ def make_smile_video(image_path: str, output_mp4: str, cut_duration: float = 2.0
     mask = np.zeros((h, w, 1), dtype=np.float32)
     y_start, y_end = int(h * 0.58), int(h * 0.72)
     for y in range(h):
-        if y > y_end: mask[y] = 1.0
+        if y > y_end:
+            mask[y] = 1.0
         elif y > y_start:
             ratio = (y - y_start) / float(y_end - y_start)
             mask[y] = 0.5 * (1.0 - np.cos(ratio * np.pi))
 
     os.makedirs("proc_frames", exist_ok=True)
-    blend_len = 6 # 尾部平滑过渡帧数
+    blend_len = 6  # 尾部平滑过渡帧数
     for idx, fn in enumerate(files):
         arr = np.array(Image.open(f"tmp_frames/{fn}").convert("RGB"), dtype=np.float32)
-        arr_locked = (1.0 - mask) * arr + mask * f0 # 锁死双脚
+        arr_locked = (1.0 - mask) * arr + mask * f0  # 锁死双脚
         if idx >= total_f - blend_len:
             fade = (idx - (total_f - blend_len) + 1) / float(blend_len + 1)
             smooth_fade = 0.5 * (1.0 - np.cos(fade * np.pi))
-            arr_locked = (1.0 - smooth_fade) * arr_locked + smooth_fade * f0 # 平滑闭环
+            arr_locked = (1.0 - smooth_fade) * arr_locked + smooth_fade * f0  # 平滑闭环
         Image.fromarray(np.clip(arr_locked, 0, 255).astype(np.uint8)).save(f"proc_frames/f_{idx:03d}.png")
 
     # 5. FFmpeg CAS 锐化与 Lanczos 1080P 高清压制
