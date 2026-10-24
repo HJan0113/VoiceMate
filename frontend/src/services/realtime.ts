@@ -20,20 +20,32 @@ export class RealtimeClient {
       const socket = new WebSocket(url);
       this.socket = socket;
       socket.binaryType = "arraybuffer";
+      let opened = false;
       socket.onopen = () => {
+        if (this.socket !== socket) return;
         socket.send(
           JSON.stringify({ type: "auth", token, protocolVersion: 1 }),
         );
+        opened = true;
         resolve();
       };
-      socket.onerror = () => reject(new Error("实时连接失败"));
+      socket.onerror = () => {
+        if (this.socket !== socket) return;
+        if (!opened) reject(new Error("实时连接失败"));
+      };
       socket.onmessage = (message) => {
-        if (typeof message.data === "string")
+        if (this.socket !== socket || typeof message.data !== "string") return;
+        try {
           this.emit(JSON.parse(message.data) as ServerEvent);
+        } catch {
+          this.emit({ type: "error" });
+        }
       };
       socket.onclose = () => {
+        if (this.socket !== socket) return;
         this.socket = null;
-        this.emit({ type: "connection.closed" });
+        if (opened) this.emit({ type: "connection.closed" });
+        else reject(new Error("实时连接失败"));
       };
     });
   }
@@ -64,8 +76,15 @@ export class RealtimeClient {
   }
 
   close(): void {
-    this.socket?.close();
+    const socket = this.socket;
     this.socket = null;
+    if (!socket) return;
+    // 清除旧连接的回调，避免关闭和消息事件污染新会话。
+    socket.onopen = null;
+    socket.onclose = null;
+    socket.onerror = null;
+    socket.onmessage = null;
+    socket.close();
   }
   private send(value: object): void {
     if (this.socket?.readyState === WebSocket.OPEN)
