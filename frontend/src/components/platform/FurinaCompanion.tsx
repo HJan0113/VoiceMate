@@ -19,28 +19,50 @@ export function FurinaCompanion({
   const idleVideoRef = useRef<HTMLVideoElement>(null);
   const happyVideoRef = useRef<HTMLVideoElement>(null);
   const sadVideoRef = useRef<HTMLVideoElement>(null);
+  const angryVideoRef = useRef<HTMLVideoElement>(null);
   const [pipActive, setPipActive] = useState(false);
 
-  const isSad = emotion
+  const isAngry = emotion
     ? [
-        "sad",
-        "crying",
-        "weeping",
-        "tears",
-        "sorrow",
-        "grief",
-        "伤心",
-        "难过",
-        "哭泣",
-        "流泪",
-        "委屈",
-        "失落",
-        "落泪",
+        "angry",
+        "pout",
+        "annoyed",
+        "furious",
+        "rage",
+        "mad",
+        "displeased",
+        "愤怒",
+        "生气",
+        "发怒",
+        "气恼",
+        "不满",
+        "愠怒",
+        "暴怒",
+        "恼火",
       ].includes(emotion.toLowerCase())
     : false;
 
+  const isSad =
+    !isAngry && emotion
+      ? [
+          "sad",
+          "crying",
+          "weeping",
+          "tears",
+          "sorrow",
+          "grief",
+          "伤心",
+          "难过",
+          "哭泣",
+          "流泪",
+          "委屈",
+          "失落",
+          "落泪",
+        ].includes(emotion.toLowerCase())
+      : false;
+
   const isHappy =
-    !isSad && emotion
+    !isAngry && !isSad && emotion
       ? [
           "happy",
           "loving",
@@ -74,6 +96,9 @@ export function FurinaCompanion({
     if (sadVideoRef.current) {
       sadVideoRef.current.playbackRate = rate;
     }
+    if (angryVideoRef.current) {
+      angryVideoRef.current.playbackRate = rate;
+    }
   }, [state]);
 
   // 当开心触发时，从头开始播放开心动画并确保播放
@@ -106,6 +131,21 @@ export function FurinaCompanion({
     }
   }, [isSad]);
 
+  // 当愤怒/气恼触发时，从头开始播放愤怒气恼动画并确保播放
+  useEffect(() => {
+    if (isAngry && angryVideoRef.current) {
+      angryVideoRef.current.currentTime = 0;
+      const playVideo = async () => {
+        try {
+          await angryVideoRef.current?.play();
+        } catch {
+          // 忽略非用户手势导致自动播放策略受限
+        }
+      };
+      void playVideo();
+    }
+  }, [isAngry]);
+
   // 计算当前展示的气泡台词
   const bubbleText = assistantText
     ? `「${assistantText}」`
@@ -114,7 +154,9 @@ export function FurinaCompanion({
   // 画中画模式
   const togglePip = async () => {
     let video = idleVideoRef.current;
-    if (isSad) {
+    if (isAngry) {
+      video = angryVideoRef.current;
+    } else if (isSad) {
       video = sadVideoRef.current;
     } else if (isHappy) {
       video = happyVideoRef.current;
@@ -140,7 +182,7 @@ export function FurinaCompanion({
         <video
           ref={idleVideoRef}
           src="/assets/characters/furina/furina_idle.mp4"
-          className={`furina-video ${!isHappy && !isSad ? "furina-video-active" : "furina-video-hidden"}`}
+          className={`furina-video ${!isHappy && !isSad && !isAngry ? "furina-video-active" : "furina-video-hidden"}`}
           autoPlay
           loop
           muted
@@ -175,8 +217,29 @@ export function FurinaCompanion({
           data-testid="furina-video-sad"
         />
 
+        {/* 愤怒气恼动画 */}
+        <video
+          ref={angryVideoRef}
+          src="/assets/characters/furina/furina_angry.mp4"
+          className={`furina-video ${isAngry ? "furina-video-active" : "furina-video-hidden"}`}
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-label="芙宁娜愤怒气恼动画"
+          data-testid="furina-video-angry"
+        />
+
         {/* 右上侧悬浮状态标签与画中画按钮 */}
         <div className="furina-floating-corner">
+          {isAngry && (
+            <span
+              className="furina-emotion-tag angry"
+              data-testid="furina-angry-badge"
+            >
+              😠 愤怒
+            </span>
+          )}
           {isSad && (
             <span
               className="furina-emotion-tag sad"

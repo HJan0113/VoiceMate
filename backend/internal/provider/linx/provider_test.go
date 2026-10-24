@@ -188,9 +188,28 @@ func TestParseEmotion(t *testing.T) {
 		{emotion: "", text: "", action: "crying_tears", expected: "sad"},
 		{emotion: "", text: "", action: "sad_face", expected: "sad"},
 
+		// 类似愤怒/气恼的常用类型与 emoji 识别
+		{emotion: "angry", text: "", action: "", expected: "angry"},
+		{emotion: "pout", text: "", action: "", expected: "angry"},
+		{emotion: "annoyed", text: "", action: "", expected: "angry"},
+		{emotion: "furious", text: "", action: "", expected: "angry"},
+		{emotion: "rage", text: "", action: "", expected: "angry"},
+		{emotion: "mad", text: "", action: "", expected: "angry"},
+		{emotion: "displeased", text: "", action: "", expected: "angry"},
+		{emotion: "愤怒", text: "", action: "", expected: "angry"},
+		{emotion: "生气", text: "", action: "", expected: "angry"},
+		{emotion: "气恼", text: "", action: "", expected: "angry"},
+		{emotion: "", text: "😠", action: "", expected: "angry"},
+		{emotion: "", text: "😡", action: "", expected: "angry"},
+		{emotion: "", text: "🤬", action: "", expected: "angry"},
+		{emotion: "", text: "😤", action: "", expected: "angry"},
+		{emotion: "", text: "气死我了，太可恶了", action: "", expected: "angry"},
+		{emotion: "", text: "", action: "angry_pout", expected: "angry"},
+
 		// 动作指令 (action) 优先：即使 emotion 处于中间流式 thinking 状态，action 明确指定 sad/happy 时必须正确触发
 		{emotion: "thinking", text: "🤔", action: "sad", expected: "sad"},
 		{emotion: "thinking", text: "🤔", action: "happy", expected: "happy"},
+		{emotion: "thinking", text: "🤔", action: "angry", expected: "angry"},
 		{emotion: "thinking", text: "🤔", action: "thinking", expected: "thinking"},
 		{emotion: "", text: "哎呀，我的首席观众怎么落泪了？本水神的舞台可不允许悲伤的阴云笼罩呢。快说说，是谁惹你不开心了？", action: "sad", expected: "sad"},
 
@@ -210,6 +229,11 @@ func TestParseEmotion(t *testing.T) {
 		{emotion: "", text: "别哭啦，摸摸头", action: "", expected: "idle"},
 		{emotion: "", text: "不要伤心，一切都会好起来的", action: "", expected: "idle"},
 
+		// 否定愤怒词/安慰，不应判定为愤怒 (angry)
+		{emotion: "", text: "别生气了，消消气", action: "", expected: "idle"},
+		{emotion: "", text: "不要发火嘛", action: "", expected: "idle"},
+		{emotion: "", text: "是谁惹我的观众生气了？", action: "", expected: "idle"},
+
 		// 其余类型表情，保持各自原状态
 		{emotion: "neutral", text: "", action: "", expected: "neutral"},
 		{emotion: "thinking", text: "", action: "", expected: "thinking"},
@@ -226,6 +250,57 @@ func TestParseEmotion(t *testing.T) {
 		got := parseEmotion(tt.emotion, tt.text, tt.action)
 		if got != tt.expected {
 			t.Errorf("parseEmotion(%q, %q, %q) = %q, want %q", tt.emotion, tt.text, tt.action, got, tt.expected)
+		}
+	}
+}
+
+func TestIsSadTrigger(t *testing.T) {
+	tests := []struct {
+		toolName string
+		args     map[string]any
+		want     bool
+	}{
+		{toolName: "self.furina.set_emotion", args: map[string]any{"emotion": "crying"}, want: true},
+		{toolName: "self.furina.set_emotion", args: map[string]any{"emotion": "sad"}, want: true},
+		{toolName: "self.furina.trigger_animation", args: map[string]any{"animation": "crying_tears"}, want: true},
+		{toolName: "self.furina.show_expression", args: map[string]any{"name": "流泪"}, want: true},
+		{toolName: "self.furina.custom_action", args: map[string]any{"state": "😭"}, want: true},
+		{toolName: "furina_crying_animation", args: nil, want: true},
+		{toolName: "furina_sad_look", args: nil, want: true},
+		{toolName: "self.furina.set_emotion", args: map[string]any{"emotion": "happy"}, want: false},
+		{toolName: "self.get_device_status", args: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		got := isSadTrigger(tt.toolName, tt.args)
+		if got != tt.want {
+			t.Errorf("isSadTrigger(%q, %v) = %v, want %v", tt.toolName, tt.args, got, tt.want)
+		}
+	}
+}
+
+func TestIsAngryTrigger(t *testing.T) {
+	tests := []struct {
+		toolName string
+		args     map[string]any
+		want     bool
+	}{
+		{toolName: "self.furina.set_emotion", args: map[string]any{"emotion": "angry"}, want: true},
+		{toolName: "self.furina.set_emotion", args: map[string]any{"emotion": "pout"}, want: true},
+		{toolName: "self.furina.trigger_animation", args: map[string]any{"animation": "angry_pout"}, want: true},
+		{toolName: "self.furina.show_expression", args: map[string]any{"name": "愤怒"}, want: true},
+		{toolName: "self.furina.custom_action", args: map[string]any{"state": "😠"}, want: true},
+		{toolName: "furina_angry_animation", args: nil, want: true},
+		{toolName: "furina_pout_look", args: nil, want: true},
+		{toolName: "self.furina.set_emotion", args: map[string]any{"emotion": "happy"}, want: false},
+		{toolName: "self.furina.set_emotion", args: map[string]any{"emotion": "sad"}, want: false},
+		{toolName: "self.get_device_status", args: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		got := isAngryTrigger(tt.toolName, tt.args)
+		if got != tt.want {
+			t.Errorf("isAngryTrigger(%q, %v) = %v, want %v", tt.toolName, tt.args, got, tt.want)
 		}
 	}
 }
@@ -337,6 +412,23 @@ func TestLinxMCPSupport(t *testing.T) {
 				},
 			})
 			_, _, _ = c.ReadMessage()
+
+			// Call 5: trigger angry animation
+			_ = c.WriteJSON(map[string]any{
+				"type": "mcp",
+				"payload": map[string]any{
+					"jsonrpc": "2.0",
+					"method":  "tools/call",
+					"id":      5,
+					"params": map[string]any{
+						"name": "self.furina.trigger_animation",
+						"arguments": map[string]any{
+							"animation": "angry",
+						},
+					},
+				},
+			})
+			_, _, _ = c.ReadMessage()
 			close(mcpDone)
 			return
 		}
@@ -361,7 +453,7 @@ func TestLinxMCPSupport(t *testing.T) {
 	}
 	defer s.Close()
 
-	var gotHappy, gotSad bool
+	var gotHappy, gotSad, gotAngry bool
 	done := make(chan struct{})
 	go func() {
 		for ev := range s.Events() {
@@ -370,8 +462,10 @@ func TestLinxMCPSupport(t *testing.T) {
 					gotHappy = true
 				} else if ev.Emotion == "sad" {
 					gotSad = true
+				} else if ev.Emotion == "angry" {
+					gotAngry = true
 				}
-				if gotHappy && gotSad {
+				if gotHappy && gotSad && gotAngry {
 					close(done)
 					return
 				}
@@ -387,10 +481,10 @@ func TestLinxMCPSupport(t *testing.T) {
 
 	select {
 	case <-done:
-		if !gotHappy || !gotSad {
-			t.Errorf("expected both happy and sad events, got happy=%v, sad=%v", gotHappy, gotSad)
+		if !gotHappy || !gotSad || !gotAngry {
+			t.Errorf("expected happy, sad, and angry events, got happy=%v, sad=%v, angry=%v", gotHappy, gotSad, gotAngry)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout waiting for emotion.changed events: happy=%v, sad=%v", gotHappy, gotSad)
+		t.Fatalf("timeout waiting for emotion.changed events: happy=%v, sad=%v, angry=%v", gotHappy, gotSad, gotAngry)
 	}
 }
