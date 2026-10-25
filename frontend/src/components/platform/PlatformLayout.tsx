@@ -14,12 +14,15 @@ type PlatformLayoutProps = {
   muted: boolean;
   emotion?: string;
   assistantText?: string;
+  canHeadPat?: boolean;
+  headPatLocked?: boolean;
   onSessionAction: () => void;
   onEndSession: () => void;
   onToggleMute: () => void;
   onStartVoice: () => void;
   onStopVoice: () => void;
   onSendText?: (text: string) => boolean;
+  onHeadPat?: () => boolean;
 };
 
 export function PlatformLayout({
@@ -32,12 +35,15 @@ export function PlatformLayout({
   muted,
   emotion,
   assistantText,
+  canHeadPat,
+  headPatLocked,
   onSessionAction,
   onEndSession,
   onToggleMute,
   onStartVoice,
   onStopVoice,
   onSendText,
+  onHeadPat,
 }: PlatformLayoutProps) {
   return (
     <main className="shell" aria-label="实时伴侣主界面">
@@ -48,6 +54,9 @@ export function PlatformLayout({
         assistantText={assistantText}
         notice={error ?? notice}
         onSendText={onSendText}
+        canHeadPat={canHeadPat}
+        headPatLocked={headPatLocked}
+        onHeadPat={onHeadPat}
       />
 
       {/* 顶部四周悬浮 HUD 栏（左：品牌与状态；右：复杂仪表盘 Dialog 入口） */}

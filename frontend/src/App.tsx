@@ -12,6 +12,10 @@ import { createSession } from "./services/api";
 import { RealtimeClient } from "./services/realtime";
 import "./App.css";
 
+const HEAD_PAT_PROMPT =
+  "用户刚刚在界面上轻轻摸了摸你的头。请结合当前对话，以你原本的角色身份自然回应一两句话，直接对用户说话，不复述这段要求。";
+const HEAD_PAT_DISPLAY = "（轻轻摸了摸芙宁娜的头）";
+
 function App() {
   const [state, setState] = useState<ConnectionState>("connecting");
   const [notice, setNotice] = useState("正在连接灵矽服务...");
@@ -21,6 +25,7 @@ function App() {
   const [muted, setMuted] = useState(false);
   const [emotion, setEmotion] = useState<string>("neutral");
   const [assistantText, setAssistantText] = useState<string>("");
+  const [headPatLocked, setHeadPatLocked] = useState(false);
 
   const client = useMemo(() => new RealtimeClient(), []);
   const microphone = useMemo(() => new MicrophoneCapture(), []);
@@ -31,6 +36,7 @@ function App() {
   const mutedRef = useRef(false);
   const processingTimerRef = useRef<number | null>(null);
   const emotionResetTimerRef = useRef<number | null>(null);
+  const headPatCooldownRef = useRef<number | null>(null);
   const playbackWaitTokenRef = useRef(0);
   const playbackIdleCleanupRef = useRef<(() => void) | null>(null);
 
@@ -46,6 +52,14 @@ function App() {
       window.clearTimeout(emotionResetTimerRef.current);
       emotionResetTimerRef.current = null;
     }
+  }, []);
+
+  const clearHeadPatCooldown = useCallback(() => {
+    if (headPatCooldownRef.current !== null) {
+      window.clearTimeout(headPatCooldownRef.current);
+      headPatCooldownRef.current = null;
+    }
+    setHeadPatLocked(false);
   }, []);
 
   const invalidatePlaybackWait = useCallback(() => {
@@ -88,11 +102,12 @@ function App() {
     processingTimerRef.current = window.setTimeout(() => {
       if (!isRecordingRef.current) {
         client.interrupt();
+        clearHeadPatCooldown();
         setState("ready");
         setNotice("未识别到有效语音或响应超时，按住按钮可重新说话");
       }
     }, 7000);
-  }, [clearProcessingTimer, client]);
+  }, [clearHeadPatCooldown, clearProcessingTimer, client]);
 
   // 页面加载时自动连接服务
   useEffect(() => {
@@ -120,6 +135,7 @@ function App() {
     const releaseResources = () => {
       clearProcessingTimer();
       clearEmotionResetTimer();
+      clearHeadPatCooldown();
       invalidatePlaybackWait();
       isRecordingRef.current = false;
       microphone.stop();
@@ -134,6 +150,7 @@ function App() {
   }, [
     clearEmotionResetTimer,
     clearProcessingTimer,
+    clearHeadPatCooldown,
     invalidatePlaybackWait,
     client,
     microphone,
@@ -222,6 +239,7 @@ function App() {
       }
       if (event.type === "connection.closed") {
         clearProcessingTimer();
+        clearHeadPatCooldown();
         invalidatePlaybackWait();
         isRecordingRef.current = false;
         microphone.stop();
@@ -232,6 +250,7 @@ function App() {
       }
       if (event.type === "error") {
         clearProcessingTimer();
+        clearHeadPatCooldown();
         invalidatePlaybackWait();
         isRecordingRef.current = false;
         microphone.stop();
@@ -251,6 +270,7 @@ function App() {
       unlistenEvents();
     };
   }, [
+    clearHeadPatCooldown,
     clearEmotionResetTimer,
     clearProcessingTimer,
     client,
@@ -264,6 +284,7 @@ function App() {
   // 连接服务（用于重试或手动开始）
   async function startSession() {
     setError(null);
+    clearHeadPatCooldown();
     client.close();
     player.ensureContext();
     setState("connecting");
@@ -350,7 +371,7 @@ function App() {
   }
 
   // 发送文本
-  function sendText(text: string): boolean {
+  function sendText(text: string, displayText = text): boolean {
     if (!text || state !== "ready") return false;
     const clientTurnId = client.startTextTurn(text);
     if (!clientTurnId) return false;
@@ -365,7 +386,7 @@ function App() {
       {
         id: `user_${clientTurnId}`,
         role: "user",
-        text,
+        text: displayText,
         turnId: clientTurnId,
       },
     ]);
@@ -373,6 +394,21 @@ function App() {
     setState("processing");
     setNotice("正在思考与回复中...");
     startProcessingWatchdog();
+    return true;
+  }
+
+  function handleHeadPat(): boolean {
+    if (state !== "ready" || headPatLocked) return false;
+    setHeadPatLocked(true);
+    const accepted = sendText(HEAD_PAT_PROMPT, HEAD_PAT_DISPLAY);
+    if (!accepted) {
+      setHeadPatLocked(false);
+      return false;
+    }
+    headPatCooldownRef.current = window.setTimeout(() => {
+      headPatCooldownRef.current = null;
+      setHeadPatLocked(false);
+    }, 2000);
     return true;
   }
 
@@ -387,6 +423,9 @@ function App() {
       muted={muted}
       emotion={emotion}
       assistantText={assistantText}
+      canHeadPat={state === "ready" && !headPatLocked}
+      headPatLocked={headPatLocked}
+      onHeadPat={handleHeadPat}
       onSessionAction={() => void startSession()}
       onEndSession={endSession}
       onToggleMute={() => {
