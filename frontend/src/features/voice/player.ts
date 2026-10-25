@@ -3,6 +3,8 @@ export class PcmStreamPlayer {
   private scheduledTime = 0;
   private muted = false;
   private readonly sampleRate: number;
+  private readonly activeSources = new Set<AudioBufferSourceNode>();
+  private readonly idleListeners = new Set<() => void>();
 
   constructor(sampleRate = 16000) {
     this.sampleRate = sampleRate;
@@ -51,6 +53,11 @@ export class PcmStreamPlayer {
     const source = this.audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(this.audioCtx.destination);
+    this.activeSources.add(source);
+    source.onended = () => {
+      this.activeSources.delete(source);
+      if (this.activeSources.size === 0) this.notifyIdle();
+    };
 
     const now = this.audioCtx.currentTime;
     const startTime = Math.max(now, this.scheduledTime);
@@ -62,11 +69,32 @@ export class PcmStreamPlayer {
     if (this.audioCtx) {
       this.scheduledTime = this.audioCtx.currentTime;
     }
+    for (const source of this.activeSources) {
+      source.onended = null;
+      source.stop();
+      source.disconnect();
+    }
+    this.activeSources.clear();
+    this.notifyIdle();
+  }
+
+  isPlaying(): boolean {
+    return this.activeSources.size > 0;
+  }
+
+  onIdle(listener: () => void): () => void {
+    this.idleListeners.add(listener);
+    return () => this.idleListeners.delete(listener);
   }
 
   close(): void {
     this.stop();
     void this.audioCtx?.close();
     this.audioCtx = null;
+  }
+
+  private notifyIdle(): void {
+    if (this.activeSources.size > 0) return;
+    this.idleListeners.forEach((listener) => listener());
   }
 }
