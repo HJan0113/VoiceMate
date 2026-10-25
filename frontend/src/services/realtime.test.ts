@@ -91,4 +91,26 @@ describe("RealtimeClient", () => {
 
     expect(events).toEqual([]);
   });
+
+  it("starts a text turn before sending the text payload", async () => {
+    const client = new RealtimeClient();
+    const connection = client.connect("ws://localhost/realtime", "token");
+    const socket = MockWebSocket.instances[0];
+    socket.open();
+    await connection;
+
+    const turnId = client.startTextTurn("你好");
+
+    expect(turnId).toMatch(/^turn_/);
+    expect(socket.sent.slice(1)).toEqual([
+      JSON.stringify({ type: "turn.start", clientTurnId: turnId }),
+      JSON.stringify({ type: "chat.text", text: "你好" }),
+    ]);
+  });
+
+  it("rejects a text turn when the socket is not open", () => {
+    const client = new RealtimeClient();
+
+    expect(client.startTextTurn("你好")).toBeNull();
+  });
 });

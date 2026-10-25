@@ -127,14 +127,25 @@ function App() {
         setEmotion(event.emotion);
       }
       if (event.type === "transcript.final" && event.text) {
-        setLines((current) => [
-          ...current,
-          {
-            id: `user_${Date.now()}`,
-            role: "user",
-            text: event.text!,
-          },
-        ]);
+        setLines((current) => {
+          if (
+            event.turnId &&
+            current.some(
+              (line) => line.role === "user" && line.turnId === event.turnId,
+            )
+          ) {
+            return current;
+          }
+          return [
+            ...current,
+            {
+              id: `user_${event.turnId ?? Date.now()}`,
+              role: "user" as const,
+              text: event.text!,
+              turnId: event.turnId,
+            },
+          ];
+        });
         setState("processing");
         setNotice("正在思考回复...");
         startProcessingWatchdog();
@@ -145,7 +156,7 @@ function App() {
         setAssistantText((prev) => prev + event.text!);
         setLines((current) => {
           const last = current.at(-1);
-          if (last?.role === "assistant") {
+          if (last?.role === "assistant" && last.turnId === event.turnId) {
             return [
               ...current.slice(0, -1),
               { ...last, text: `${last.text}${event.text}` },
@@ -154,9 +165,10 @@ function App() {
           return [
             ...current,
             {
-              id: `assistant_${Date.now()}`,
+              id: `assistant_${event.turnId ?? Date.now()}`,
               role: "assistant",
               text: event.text!,
+              turnId: event.turnId,
             },
           ];
         });
@@ -296,8 +308,10 @@ function App() {
   }
 
   // 发送文本
-  function sendText(text: string) {
-    if (!text || (state !== "ready" && state !== "processing")) return;
+  function sendText(text: string): boolean {
+    if (!text || state !== "ready") return false;
+    const clientTurnId = client.startTextTurn(text);
+    if (!clientTurnId) return false;
     clearProcessingTimer();
     player.ensureContext();
     player.stop();
@@ -306,16 +320,17 @@ function App() {
     setLines((current) => [
       ...current,
       {
-        id: `user_${Date.now()}`,
+        id: `user_${clientTurnId}`,
         role: "user",
         text,
+        turnId: clientTurnId,
       },
     ]);
 
     setState("processing");
     setNotice("正在思考与回复中...");
-    client.sendText(text);
     startProcessingWatchdog();
+    return true;
   }
 
   return (

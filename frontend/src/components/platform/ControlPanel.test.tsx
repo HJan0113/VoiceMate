@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionState } from "../../domain/types";
 import { ControlPanel } from "./ControlPanel";
+import { DashboardDialog } from "./DashboardDialog";
 import { PlatformLayout } from "./PlatformLayout";
 import { TranscriptPanel } from "./TranscriptPanel";
+
+afterEach(() => {
+  cleanup();
+});
 
 function renderPanel(state: ConnectionState = "ready") {
   const onSessionAction = vi.fn();
@@ -49,6 +54,40 @@ describe("ControlPanel", () => {
 });
 
 describe("PlatformLayout", () => {
+  it("submits dashboard text only when the session is ready", () => {
+    const onSendText = vi.fn().mockReturnValue(true);
+    const { rerender } = render(
+      <DashboardDialog
+        state="ready"
+        error={null}
+        muted={false}
+        lines={[]}
+        onSendText={onSendText}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "打开会话仪表盘" }));
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "你好" } });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+    expect(onSendText).toHaveBeenCalledWith("你好");
+    expect((input as HTMLInputElement).value).toBe("");
+
+    rerender(
+      <DashboardDialog
+        state="processing"
+        error={null}
+        muted={false}
+        lines={[]}
+        onSendText={onSendText}
+      />,
+    );
+    expect((screen.getByRole("textbox") as HTMLInputElement).disabled).toBe(
+      true,
+    );
+  });
+
   it("opens the dashboard dialog when clicking the trigger button", () => {
     render(
       <PlatformLayout
