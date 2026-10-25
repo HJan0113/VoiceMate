@@ -169,8 +169,9 @@ export function FurinaCompanion({
 
   const triggerHeadPat = () => {
     if (!canHeadPat || headPatLocked || headPatActive) return;
+    const accepted = onHeadPat?.() ?? true;
+    if (!accepted) return;
     setHeadPatActive(true);
-    onHeadPat?.();
     headPatTimerRef.current = window.setTimeout(() => {
       setHeadPatActive(false);
       headPatTimerRef.current = null;
@@ -206,6 +207,7 @@ export function FurinaCompanion({
       <div className="furina-stage">
         <div
           className={`furina-character-frame ${headPatActive ? "head-pat-active" : ""}`}
+          data-testid="furina-character-frame"
         >
           {/* 默认站立待机动画 */}
           <video
@@ -265,7 +267,6 @@ export function FurinaCompanion({
             onClick={triggerHeadPat}
             disabled={!canHeadPat || headPatLocked || headPatActive}
             aria-label="摸摸头"
-            aria-pressed={headPatActive}
             title={canHeadPat ? "摸摸头" : "当前暂不可互动"}
             data-testid="furina-head-hitbox"
           />

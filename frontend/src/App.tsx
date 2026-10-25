@@ -54,13 +54,17 @@ function App() {
     }
   }, []);
 
-  const clearHeadPatCooldown = useCallback(() => {
+  const clearHeadPatTimer = useCallback(() => {
     if (headPatCooldownRef.current !== null) {
       window.clearTimeout(headPatCooldownRef.current);
       headPatCooldownRef.current = null;
     }
-    setHeadPatLocked(false);
   }, []);
+
+  const clearHeadPatCooldown = useCallback(() => {
+    clearHeadPatTimer();
+    setHeadPatLocked(false);
+  }, [clearHeadPatTimer]);
 
   const invalidatePlaybackWait = useCallback(() => {
     playbackWaitTokenRef.current += 1;
@@ -135,7 +139,7 @@ function App() {
     const releaseResources = () => {
       clearProcessingTimer();
       clearEmotionResetTimer();
-      clearHeadPatCooldown();
+      clearHeadPatTimer();
       invalidatePlaybackWait();
       isRecordingRef.current = false;
       microphone.stop();
@@ -151,6 +155,7 @@ function App() {
     clearEmotionResetTimer,
     clearProcessingTimer,
     clearHeadPatCooldown,
+    clearHeadPatTimer,
     invalidatePlaybackWait,
     client,
     microphone,

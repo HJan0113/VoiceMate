@@ -150,7 +150,7 @@ describe("FurinaCompanion", () => {
   });
 
   it("triggers head-pat feedback only when the hitbox is enabled", () => {
-    const onHeadPat = vi.fn();
+    const onHeadPat = vi.fn().mockReturnValue(true);
     render(
       <FurinaCompanion
         state="ready"
@@ -165,6 +165,8 @@ describe("FurinaCompanion", () => {
     fireEvent.click(hitbox);
 
     expect(onHeadPat).toHaveBeenCalledOnce();
-    expect(hitbox.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("furina-character-frame").className).toContain(
+      "head-pat-active",
+    );
   });
 });
