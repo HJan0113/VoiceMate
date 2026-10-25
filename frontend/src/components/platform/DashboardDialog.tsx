@@ -19,7 +19,8 @@ type DashboardDialogProps = {
   error: string | null;
   sessionId?: string;
   emotion?: string;
-  muted: boolean;
+  microphoneMuted: boolean;
+  speakerMuted: boolean;
   lines: ChatLine[];
   onSendText?: (text: string) => boolean;
 };
@@ -29,7 +30,8 @@ export function DashboardDialog({
   error,
   sessionId,
   emotion,
-  muted,
+  microphoneMuted,
+  speakerMuted,
   lines,
   onSendText,
 }: DashboardDialogProps) {
@@ -83,7 +85,8 @@ export function DashboardDialog({
             state={state}
             sessionId={sessionId}
             emotion={emotion}
-            muted={muted}
+            microphoneMuted={microphoneMuted}
+            speakerMuted={speakerMuted}
           />
 
           <ErrorNotice message={error} />

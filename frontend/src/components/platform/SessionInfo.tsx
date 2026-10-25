@@ -5,14 +5,16 @@ type SessionInfoProps = {
   state: ConnectionState;
   sessionId?: string;
   emotion?: string;
-  muted?: boolean;
+  microphoneMuted?: boolean;
+  speakerMuted?: boolean;
 };
 
 export function SessionInfo({
   state,
   sessionId,
   emotion = "neutral",
-  muted = false,
+  microphoneMuted = false,
+  speakerMuted = false,
 }: SessionInfoProps) {
   return (
     <section className="session-info" aria-label="会话信息">
@@ -30,8 +32,12 @@ export function SessionInfo({
           <dd>{emotion}</dd>
         </div>
         <div>
-          <dt>音频</dt>
-          <dd>{muted ? "已静音" : "正常"}</dd>
+          <dt>麦克风</dt>
+          <dd>{microphoneMuted ? "已静音" : "正常"}</dd>
+        </div>
+        <div>
+          <dt>扬声器</dt>
+          <dd>{speakerMuted ? "已静音" : "正常"}</dd>
         </div>
         <div>
           <dt>ID</dt>

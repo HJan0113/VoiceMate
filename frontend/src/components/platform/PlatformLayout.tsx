@@ -11,14 +11,16 @@ type PlatformLayoutProps = {
   sessionId?: string;
   lines: ChatLine[];
   disabled: boolean;
-  muted: boolean;
+  microphoneMuted: boolean;
+  speakerMuted: boolean;
   emotion?: string;
   assistantText?: string;
   canHeadPat?: boolean;
   headPatLocked?: boolean;
   onSessionAction: () => void;
   onEndSession: () => void;
-  onToggleMute: () => void;
+  onToggleMicrophoneMute: () => void;
+  onToggleSpeakerMute: () => void;
   onStartVoice: () => void;
   onStopVoice: () => void;
   onSendText?: (text: string) => boolean;
@@ -32,14 +34,16 @@ export function PlatformLayout({
   sessionId,
   lines,
   disabled,
-  muted,
+  microphoneMuted,
+  speakerMuted,
   emotion,
   assistantText,
   canHeadPat,
   headPatLocked,
   onSessionAction,
   onEndSession,
-  onToggleMute,
+  onToggleMicrophoneMute,
+  onToggleSpeakerMute,
   onStartVoice,
   onStopVoice,
   onSendText,
@@ -68,7 +72,8 @@ export function PlatformLayout({
             error={error}
             sessionId={sessionId}
             emotion={emotion}
-            muted={muted}
+            microphoneMuted={microphoneMuted}
+            speakerMuted={speakerMuted}
             lines={lines}
             onSendText={onSendText}
           />
@@ -80,10 +85,12 @@ export function PlatformLayout({
         state={state}
         notice={notice}
         disabled={disabled}
-        muted={muted}
+        microphoneMuted={microphoneMuted}
+        speakerMuted={speakerMuted}
         onSessionAction={onSessionAction}
         onEndSession={onEndSession}
-        onToggleMute={onToggleMute}
+        onToggleMicrophoneMute={onToggleMicrophoneMute}
+        onToggleSpeakerMute={onToggleSpeakerMute}
         onStartVoice={onStartVoice}
         onStopVoice={onStopVoice}
         onSendText={onSendText}

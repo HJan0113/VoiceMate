@@ -40,6 +40,28 @@ afterEach(() => {
 });
 
 describe("PcmStreamPlayer", () => {
+  it("silences queued and incoming audio until unmuted", () => {
+    const context = new MockAudioContext();
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        constructor() {
+          return context;
+        }
+      },
+    );
+    const player = new PcmStreamPlayer();
+    const chunk = new ArrayBuffer(4);
+    player.feed(chunk);
+    player.setMuted(true);
+    expect(context.sources[0].stop).toHaveBeenCalledOnce();
+    player.feed(chunk);
+    expect(context.sources).toHaveLength(1);
+    player.setMuted(false);
+    player.feed(chunk);
+    expect(context.sources).toHaveLength(2);
+  });
+
   it("stops and disconnects queued sources", () => {
     const context = new MockAudioContext();
     vi.stubGlobal(
