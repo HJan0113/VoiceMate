@@ -432,7 +432,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(94vw, 480px);
+  width: min(94vw, 640px);
   padding: 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.88);
@@ -487,6 +487,7 @@ body,
 
 .ptt-button {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -533,6 +534,8 @@ body,
 .ptt-text {
   font-size: 14.5px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dock-side-btn {
@@ -857,6 +860,7 @@ body,
   }
 
   .dock-side-btn {
+    flex-shrink: 0;
     width: 46px;
     height: 46px;
     padding: 0;

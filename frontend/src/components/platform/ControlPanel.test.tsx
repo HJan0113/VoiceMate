@@ -16,19 +16,28 @@ function renderPanel(state: ConnectionState = "ready") {
   const onSessionAction = vi.fn();
   const onEndSession = vi.fn();
   const onInputAction = vi.fn();
-  const onToggleMute = vi.fn();
+  const onToggleMicrophoneMute = vi.fn();
+  const onToggleSpeakerMute = vi.fn();
   render(
     <ControlPanel
       state={state}
       notice="状态提示"
-      muted={false}
+      microphoneMuted={false}
+      speakerMuted={false}
       onSessionAction={onSessionAction}
       onEndSession={onEndSession}
       onInputAction={onInputAction}
-      onToggleMute={onToggleMute}
+      onToggleMicrophoneMute={onToggleMicrophoneMute}
+      onToggleSpeakerMute={onToggleSpeakerMute}
     />,
   );
-  return { onSessionAction, onEndSession, onInputAction, onToggleMute };
+  return {
+    onSessionAction,
+    onEndSession,
+    onInputAction,
+    onToggleMicrophoneMute,
+    onToggleSpeakerMute,
+  };
 }
 
 describe("ControlPanel", () => {
@@ -36,11 +45,15 @@ describe("ControlPanel", () => {
     const actions = renderPanel();
 
     fireEvent.click(screen.getByRole("button", { name: "开始输入" }));
-    fireEvent.click(screen.getByRole("button", { name: "静音" }));
+    fireEvent.click(screen.getByRole("button", { name: "静音麦克风" }));
     fireEvent.click(screen.getByRole("button", { name: "结束会话" }));
 
     expect(actions.onInputAction).toHaveBeenCalledOnce();
-    expect(actions.onToggleMute).toHaveBeenCalledOnce();
+    expect(actions.onToggleMicrophoneMute).toHaveBeenCalledOnce();
+    expect(actions.onToggleSpeakerMute).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "静音扬声器" }));
+    expect(actions.onToggleSpeakerMute).toHaveBeenCalledOnce();
+    expect(actions.onToggleMicrophoneMute).toHaveBeenCalledOnce();
     expect(actions.onEndSession).toHaveBeenCalledOnce();
   });
 
@@ -60,7 +73,8 @@ describe("PlatformLayout", () => {
       <DashboardDialog
         state="ready"
         error={null}
-        muted={false}
+        microphoneMuted={false}
+        speakerMuted={false}
         lines={[]}
         onSendText={onSendText}
       />,
@@ -78,7 +92,8 @@ describe("PlatformLayout", () => {
       <DashboardDialog
         state="processing"
         error={null}
-        muted={false}
+        microphoneMuted={false}
+        speakerMuted={false}
         lines={[]}
         onSendText={onSendText}
       />,
@@ -97,12 +112,14 @@ describe("PlatformLayout", () => {
         sessionId="sess_123"
         lines={[{ id: "1", role: "assistant", text: "你好呀" }]}
         disabled={false}
-        muted={false}
+        microphoneMuted={false}
+        speakerMuted={false}
         emotion="happy"
         assistantText="你好呀"
         onSessionAction={vi.fn()}
         onEndSession={vi.fn()}
-        onToggleMute={vi.fn()}
+        onToggleMicrophoneMute={vi.fn()}
+        onToggleSpeakerMute={vi.fn()}
         onStartVoice={vi.fn()}
         onStopVoice={vi.fn()}
         onSendText={vi.fn()}

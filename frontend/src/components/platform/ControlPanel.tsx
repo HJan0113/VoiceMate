@@ -1,15 +1,17 @@
 import { useState } from "react";
-import { Mic, PhoneOff, Power, Volume2, VolumeX } from "lucide-react";
+import { Mic, MicOff, PhoneOff, Power, Volume2, VolumeX } from "lucide-react";
 import type { ConnectionState } from "../../domain/types";
 
 type ControlPanelProps = {
   state: ConnectionState;
   notice: string;
   disabled?: boolean;
-  muted: boolean;
+  microphoneMuted: boolean;
+  speakerMuted: boolean;
   onSessionAction: () => void;
   onEndSession: () => void;
-  onToggleMute: () => void;
+  onToggleMicrophoneMute: () => void;
+  onToggleSpeakerMute: () => void;
   onInputAction?: () => void;
   onStartVoice?: () => void;
   onStopVoice?: () => void;
@@ -36,10 +38,12 @@ export function ControlPanel({
   state,
   notice,
   disabled = false,
-  muted,
+  microphoneMuted,
+  speakerMuted,
   onSessionAction,
   onEndSession,
-  onToggleMute,
+  onToggleMicrophoneMute,
+  onToggleSpeakerMute,
   onInputAction,
   onStartVoice,
   onStopVoice,
@@ -135,19 +139,37 @@ export function ControlPanel({
           <div className="dock-connected-row">
             <button
               type="button"
-              className={`dock-side-btn ${muted ? "muted" : ""}`}
-              onClick={onToggleMute}
-              aria-pressed={muted}
-              aria-label={muted ? "取消静音" : "静音"}
-              title={muted ? "取消静音" : "静音"}
+              className={`dock-side-btn ${microphoneMuted ? "muted" : ""}`}
+              onClick={onToggleMicrophoneMute}
+              aria-pressed={microphoneMuted}
+              aria-label={microphoneMuted ? "取消麦克风静音" : "静音麦克风"}
+              title={microphoneMuted ? "取消麦克风静音" : "静音麦克风"}
             >
-              {muted ? (
+              {microphoneMuted ? (
+                <MicOff className="dock-icon" aria-hidden="true" />
+              ) : (
+                <Mic className="dock-icon" aria-hidden="true" />
+              )}
+              <span className="dock-side-label">
+                {microphoneMuted ? "麦克风已静音" : "麦克风"}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`dock-side-btn ${speakerMuted ? "muted" : ""}`}
+              onClick={onToggleSpeakerMute}
+              aria-pressed={speakerMuted}
+              aria-label={speakerMuted ? "取消扬声器静音" : "静音扬声器"}
+              title={speakerMuted ? "取消扬声器静音" : "静音扬声器"}
+            >
+              {speakerMuted ? (
                 <VolumeX className="dock-icon" aria-hidden="true" />
               ) : (
                 <Volume2 className="dock-icon" aria-hidden="true" />
               )}
               <span className="dock-side-label">
-                {muted ? "取消静音" : "静音"}
+                {speakerMuted ? "扬声器已静音" : "扬声器"}
               </span>
             </button>
 

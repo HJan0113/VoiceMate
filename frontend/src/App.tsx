@@ -22,7 +22,8 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [lines, setLines] = useState<ChatLine[]>([]);
-  const [muted, setMuted] = useState(false);
+  const [microphoneMuted, setMicrophoneMuted] = useState(false);
+  const [speakerMuted, setSpeakerMuted] = useState(false);
   const [emotion, setEmotion] = useState<string>("neutral");
   const [assistantText, setAssistantText] = useState<string>("");
   const [headPatLocked, setHeadPatLocked] = useState(false);
@@ -33,7 +34,7 @@ function App() {
 
   const turnId = useRef(`turn_${crypto.randomUUID()}`);
   const isRecordingRef = useRef(false);
-  const mutedRef = useRef(false);
+  const microphoneMutedRef = useRef(false);
   const processingTimerRef = useRef<number | null>(null);
   const emotionResetTimerRef = useRef<number | null>(null);
   const headPatCooldownRef = useRef<number | null>(null);
@@ -165,9 +166,7 @@ function App() {
   useEffect(() => {
     // 监听下行二进制 PCM 音频流
     const unlistenAudio = client.onAudio((chunk) => {
-      if (!mutedRef.current) {
-        player.feed(chunk);
-      }
+      player.feed(chunk);
     });
 
     const unlistenEvents = client.on((event: ServerEvent) => {
@@ -326,7 +325,7 @@ function App() {
 
     try {
       await microphone.start((frame) => {
-        if (isRecordingRef.current && !mutedRef.current) {
+        if (isRecordingRef.current && !microphoneMutedRef.current) {
           client.sendAudio(frame);
         }
       });
@@ -367,8 +366,10 @@ function App() {
     client.interrupt();
     client.close();
     setSession(null);
-    mutedRef.current = false;
-    setMuted(false);
+    microphoneMutedRef.current = false;
+    setMicrophoneMuted(false);
+    setSpeakerMuted(false);
+    player.setMuted(false);
     setAssistantText("");
     setState("idle");
     setError(null);
@@ -425,7 +426,8 @@ function App() {
       sessionId={session?.sessionId}
       lines={lines}
       disabled={state === "connecting"}
-      muted={muted}
+      microphoneMuted={microphoneMuted}
+      speakerMuted={speakerMuted}
       emotion={emotion}
       assistantText={assistantText}
       canHeadPat={state === "ready" && !headPatLocked}
@@ -433,10 +435,14 @@ function App() {
       onHeadPat={handleHeadPat}
       onSessionAction={() => void startSession()}
       onEndSession={endSession}
-      onToggleMute={() => {
-        mutedRef.current = !mutedRef.current;
-        setMuted(mutedRef.current);
-        player.setMuted(mutedRef.current);
+      onToggleMicrophoneMute={() => {
+        microphoneMutedRef.current = !microphoneMutedRef.current;
+        setMicrophoneMuted(microphoneMutedRef.current);
+      }}
+      onToggleSpeakerMute={() => {
+        const nextMuted = !speakerMuted;
+        setSpeakerMuted(nextMuted);
+        player.setMuted(nextMuted);
       }}
       onStartVoice={() => void startVoice()}
       onStopVoice={stopVoice}
