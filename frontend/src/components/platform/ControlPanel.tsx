@@ -26,12 +26,23 @@ function getPttButtonText(
     return "松开发送";
   }
   if (state === "speaking") {
-    return "芙宁娜说话中...";
+    return "按住打断并说话";
   }
   if (state === "processing") {
     return "正在思考... (按住可打断)";
   }
   return "按住说话";
+}
+
+function getPttButtonLabel(
+  state: ConnectionState,
+  isRecording: boolean,
+): string {
+  if (isRecording) return "松开发送";
+  if (state === "speaking" || state === "processing") {
+    return "打断并开始输入";
+  }
+  return "开始输入";
 }
 
 export function ControlPanel({
@@ -182,8 +193,8 @@ export function ControlPanel({
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onClick={handleClick}
-              disabled={disabled || state === "speaking"}
-              aria-label={isRecording ? "松开发送" : "开始输入"}
+              disabled={disabled}
+              aria-label={getPttButtonLabel(state, isRecording)}
             >
               <Mic className="ptt-icon" aria-hidden="true" />
               <span className="ptt-text">

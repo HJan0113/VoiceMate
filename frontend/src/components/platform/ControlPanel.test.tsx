@@ -40,6 +40,26 @@ function renderPanel(state: ConnectionState = "ready") {
   };
 }
 
+function renderVoicePanel(state: ConnectionState) {
+  const onStartVoice = vi.fn();
+  const onStopVoice = vi.fn();
+  render(
+    <ControlPanel
+      state={state}
+      notice="状态提示"
+      microphoneMuted={false}
+      speakerMuted={false}
+      onSessionAction={vi.fn()}
+      onEndSession={vi.fn()}
+      onToggleMicrophoneMute={vi.fn()}
+      onToggleSpeakerMute={vi.fn()}
+      onStartVoice={onStartVoice}
+      onStopVoice={onStopVoice}
+    />,
+  );
+  return { onStartVoice, onStopVoice };
+}
+
 describe("ControlPanel", () => {
   it("exposes input, mute, and end actions for a ready session", () => {
     const actions = renderPanel();
@@ -63,6 +83,19 @@ describe("ControlPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "重试连接" }));
 
     expect(onSessionAction).toHaveBeenCalledOnce();
+  });
+
+  it("allows interrupting a speaking response by holding the voice button", () => {
+    const { onStartVoice, onStopVoice } = renderVoicePanel("speaking");
+    const button = screen.getByRole("button", { name: "打断并开始输入" });
+
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.mouseDown(button);
+    expect(onStartVoice).toHaveBeenCalledOnce();
+    expect(button.getAttribute("aria-label")).toBe("松开发送");
+
+    fireEvent.mouseUp(button);
+    expect(onStopVoice).toHaveBeenCalledOnce();
   });
 });
 
