@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FurinaCompanion } from "./FurinaCompanion";
 
@@ -147,5 +147,26 @@ describe("FurinaCompanion", () => {
     expect(happyVideo.className).toContain("furina-video-hidden");
     expect(sadVideo.className).toContain("furina-video-hidden");
     expect(screen.getByTestId("furina-angry-badge")).not.toBeNull();
+  });
+
+  it("triggers head-pat feedback only when the hitbox is enabled", () => {
+    const onHeadPat = vi.fn().mockReturnValue(true);
+    render(
+      <FurinaCompanion
+        state="ready"
+        emotion="neutral"
+        canHeadPat
+        onHeadPat={onHeadPat}
+      />,
+    );
+
+    const hitbox = screen.getByTestId("furina-head-hitbox");
+    expect((hitbox as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(hitbox);
+
+    expect(onHeadPat).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("furina-character-frame").className).toContain(
+      "head-pat-active",
+    );
   });
 });

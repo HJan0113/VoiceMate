@@ -8,6 +8,9 @@ type FurinaCompanionProps = {
   assistantText?: string;
   notice?: string;
   onSendText?: (text: string) => void;
+  canHeadPat?: boolean;
+  headPatLocked?: boolean;
+  onHeadPat?: () => void;
 };
 
 export function FurinaCompanion({
@@ -15,12 +18,25 @@ export function FurinaCompanion({
   emotion,
   assistantText,
   notice,
+  canHeadPat = false,
+  headPatLocked = false,
+  onHeadPat,
 }: FurinaCompanionProps) {
   const idleVideoRef = useRef<HTMLVideoElement>(null);
   const happyVideoRef = useRef<HTMLVideoElement>(null);
   const sadVideoRef = useRef<HTMLVideoElement>(null);
   const angryVideoRef = useRef<HTMLVideoElement>(null);
   const [pipActive, setPipActive] = useState(false);
+  const [headPatActive, setHeadPatActive] = useState(false);
+  const headPatTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (headPatTimerRef.current !== null) {
+        window.clearTimeout(headPatTimerRef.current);
+      }
+    };
+  }, []);
 
   const isAngry = emotion
     ? [
@@ -151,6 +167,17 @@ export function FurinaCompanion({
     ? `「${assistantText}」`
     : "「欧庇克莱大剧院的帷幕永不落空，而你，就是本名伶最忠实的特约观众~」";
 
+  const triggerHeadPat = () => {
+    if (!canHeadPat || headPatLocked || headPatActive) return;
+    const accepted = onHeadPat?.() ?? true;
+    if (!accepted) return;
+    setHeadPatActive(true);
+    headPatTimerRef.current = window.setTimeout(() => {
+      setHeadPatActive(false);
+      headPatTimerRef.current = null;
+    }, 700);
+  };
+
   // 画中画模式
   const togglePip = async () => {
     let video = idleVideoRef.current;
@@ -178,57 +205,72 @@ export function FurinaCompanion({
   return (
     <section className="furina-companion-container" aria-label="伴侣展示区">
       <div className="furina-stage">
-        {/* 默认站立待机动画 */}
-        <video
-          ref={idleVideoRef}
-          src="/assets/characters/furina/furina_idle.mp4"
-          className={`furina-video ${!isHappy && !isSad && !isAngry ? "furina-video-active" : "furina-video-hidden"}`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-label="芙宁娜站立待机动画"
-          data-testid="furina-video-idle"
-        />
+        <div
+          className={`furina-character-frame ${headPatActive ? "head-pat-active" : ""}`}
+          data-testid="furina-character-frame"
+        >
+          {/* 默认站立待机动画 */}
+          <video
+            ref={idleVideoRef}
+            src="/assets/characters/furina/furina_idle.mp4"
+            className={`furina-video ${!isHappy && !isSad && !isAngry ? "furina-video-active" : "furina-video-hidden"}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-label="芙宁娜站立待机动画"
+            data-testid="furina-video-idle"
+          />
 
-        {/* 开心微笑动画 */}
-        <video
-          ref={happyVideoRef}
-          src="/assets/characters/furina/furina_happy.mp4"
-          className={`furina-video ${isHappy ? "furina-video-active" : "furina-video-hidden"}`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-label="芙宁娜开心微笑动画"
-          data-testid="furina-video-happy"
-        />
+          {/* 开心微笑动画 */}
+          <video
+            ref={happyVideoRef}
+            src="/assets/characters/furina/furina_happy.mp4"
+            className={`furina-video ${isHappy ? "furina-video-active" : "furina-video-hidden"}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-label="芙宁娜开心微笑动画"
+            data-testid="furina-video-happy"
+          />
 
-        {/* 伤心落泪动画 */}
-        <video
-          ref={sadVideoRef}
-          src="/assets/characters/furina/furina_sad.mp4"
-          className={`furina-video ${isSad ? "furina-video-active" : "furina-video-hidden"}`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-label="芙宁娜伤心落泪动画"
-          data-testid="furina-video-sad"
-        />
+          {/* 伤心落泪动画 */}
+          <video
+            ref={sadVideoRef}
+            src="/assets/characters/furina/furina_sad.mp4"
+            className={`furina-video ${isSad ? "furina-video-active" : "furina-video-hidden"}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-label="芙宁娜伤心落泪动画"
+            data-testid="furina-video-sad"
+          />
 
-        {/* 愤怒气恼动画 */}
-        <video
-          ref={angryVideoRef}
-          src="/assets/characters/furina/furina_angry.mp4"
-          className={`furina-video ${isAngry ? "furina-video-active" : "furina-video-hidden"}`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-label="芙宁娜愤怒气恼动画"
-          data-testid="furina-video-angry"
-        />
+          {/* 愤怒气恼动画 */}
+          <video
+            ref={angryVideoRef}
+            src="/assets/characters/furina/furina_angry.mp4"
+            className={`furina-video ${isAngry ? "furina-video-active" : "furina-video-hidden"}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-label="芙宁娜愤怒气恼动画"
+            data-testid="furina-video-angry"
+          />
+
+          <button
+            type="button"
+            className="furina-head-hitbox"
+            onClick={triggerHeadPat}
+            disabled={!canHeadPat || headPatLocked || headPatActive}
+            aria-label="摸摸头"
+            title={canHeadPat ? "摸摸头" : "当前暂不可互动"}
+            data-testid="furina-head-hitbox"
+          />
+        </div>
 
         {/* 右上侧悬浮状态标签与画中画按钮 */}
         <div className="furina-floating-corner">
