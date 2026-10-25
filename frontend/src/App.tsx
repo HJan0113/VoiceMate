@@ -31,6 +31,8 @@ function App() {
   const mutedRef = useRef(false);
   const processingTimerRef = useRef<number | null>(null);
   const emotionResetTimerRef = useRef<number | null>(null);
+  const playbackWaitTokenRef = useRef(0);
+  const playbackIdleCleanupRef = useRef<(() => void) | null>(null);
 
   const clearProcessingTimer = useCallback(() => {
     if (processingTimerRef.current !== null) {
@@ -45,6 +47,41 @@ function App() {
       emotionResetTimerRef.current = null;
     }
   }, []);
+
+  const invalidatePlaybackWait = useCallback(() => {
+    playbackWaitTokenRef.current += 1;
+    playbackIdleCleanupRef.current?.();
+    playbackIdleCleanupRef.current = null;
+  }, []);
+
+  const finishTurnAfterPlayback = useCallback(() => {
+    const token = playbackWaitTokenRef.current;
+    playbackIdleCleanupRef.current?.();
+    playbackIdleCleanupRef.current = null;
+    const finish = () => {
+      if (token !== playbackWaitTokenRef.current) return;
+      playbackIdleCleanupRef.current = null;
+      if (!isRecordingRef.current) {
+        setState("ready");
+        setNotice("按住下方按钮开始说话");
+      }
+    };
+
+    if (!player.isPlaying()) {
+      finish();
+      return;
+    }
+
+    let cleanup: (() => void) | null = null;
+    cleanup = player.onIdle(() => {
+      cleanup?.();
+      if (playbackIdleCleanupRef.current === cleanup) {
+        playbackIdleCleanupRef.current = null;
+      }
+      finish();
+    });
+    playbackIdleCleanupRef.current = cleanup;
+  }, [player]);
 
   const startProcessingWatchdog = useCallback(() => {
     clearProcessingTimer();
@@ -83,6 +120,7 @@ function App() {
     const releaseResources = () => {
       clearProcessingTimer();
       clearEmotionResetTimer();
+      invalidatePlaybackWait();
       isRecordingRef.current = false;
       microphone.stop();
       player.close();
@@ -96,6 +134,7 @@ function App() {
   }, [
     clearEmotionResetTimer,
     clearProcessingTimer,
+    invalidatePlaybackWait,
     client,
     microphone,
     player,
@@ -175,10 +214,7 @@ function App() {
       }
       if (event.type === "turn.completed" || event.type === "audio.end") {
         clearProcessingTimer();
-        if (!isRecordingRef.current) {
-          setState("ready");
-          setNotice("按住下方按钮开始说话");
-        }
+        finishTurnAfterPlayback();
         clearEmotionResetTimer();
         emotionResetTimerRef.current = window.setTimeout(() => {
           setEmotion("neutral");
@@ -186,6 +222,7 @@ function App() {
       }
       if (event.type === "connection.closed") {
         clearProcessingTimer();
+        invalidatePlaybackWait();
         isRecordingRef.current = false;
         microphone.stop();
         player.stop();
@@ -195,6 +232,7 @@ function App() {
       }
       if (event.type === "error") {
         clearProcessingTimer();
+        invalidatePlaybackWait();
         isRecordingRef.current = false;
         microphone.stop();
         player.stop();
@@ -216,6 +254,8 @@ function App() {
     clearEmotionResetTimer,
     clearProcessingTimer,
     client,
+    finishTurnAfterPlayback,
+    invalidatePlaybackWait,
     microphone,
     player,
     startProcessingWatchdog,
@@ -244,6 +284,7 @@ function App() {
     if (state !== "ready" && state !== "speaking" && state !== "processing")
       return;
     clearProcessingTimer();
+    invalidatePlaybackWait();
     setError(null);
     player.ensureContext();
     player.stop(); // 打断当前正在播放的声音
@@ -293,6 +334,7 @@ function App() {
   // 结束/重置会话
   function endSession() {
     clearProcessingTimer();
+    invalidatePlaybackWait();
     isRecordingRef.current = false;
     microphone.stop();
     player.stop();
@@ -313,6 +355,7 @@ function App() {
     const clientTurnId = client.startTextTurn(text);
     if (!clientTurnId) return false;
     clearProcessingTimer();
+    invalidatePlaybackWait();
     player.ensureContext();
     player.stop();
     setAssistantText("");
