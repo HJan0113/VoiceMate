@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FurinaCompanion } from "./FurinaCompanion";
 
@@ -14,6 +20,7 @@ describe("FurinaCompanion", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it("renders idle video by default when emotion is neutral", () => {
@@ -149,7 +156,8 @@ describe("FurinaCompanion", () => {
     expect(screen.getByTestId("furina-angry-badge")).not.toBeNull();
   });
 
-  it("triggers head-pat feedback only when the hitbox is enabled", () => {
+  it("shows temporary grab and character sway feedback together", () => {
+    vi.useFakeTimers();
     const onHeadPat = vi.fn().mockReturnValue(true);
     render(
       <FurinaCompanion
@@ -165,8 +173,40 @@ describe("FurinaCompanion", () => {
     fireEvent.click(hitbox);
 
     expect(onHeadPat).toHaveBeenCalledOnce();
+    expect(hitbox.className).toContain("head-pat-active");
     expect(screen.getByTestId("furina-character-frame").className).toContain(
       "head-pat-active",
     );
+    expect((hitbox as HTMLButtonElement).disabled).toBe(true);
+
+    act(() => vi.advanceTimersByTime(700));
+    expect(hitbox.className).not.toContain("head-pat-active");
+    expect(
+      screen.getByTestId("furina-character-frame").className,
+    ).not.toContain("head-pat-active");
+    expect((hitbox as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not show grab feedback when the interaction is rejected or locked", () => {
+    const onHeadPat = vi.fn().mockReturnValue(false);
+    const { rerender } = render(
+      <FurinaCompanion state="ready" canHeadPat onHeadPat={onHeadPat} />,
+    );
+    const hitbox = screen.getByTestId("furina-head-hitbox");
+    fireEvent.click(hitbox);
+    expect(onHeadPat).toHaveBeenCalledOnce();
+    expect(hitbox.className).not.toContain("head-pat-active");
+
+    rerender(
+      <FurinaCompanion
+        state="ready"
+        canHeadPat
+        headPatLocked
+        onHeadPat={onHeadPat}
+      />,
+    );
+    fireEvent.click(hitbox);
+    expect(onHeadPat).toHaveBeenCalledOnce();
+    expect((hitbox as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PictureInPicture2 } from "lucide-react";
+import { Hand, PictureInPicture2 } from "lucide-react";
 import type { ConnectionState } from "../../domain/types";
 
 type FurinaCompanionProps = {
@@ -10,7 +10,7 @@ type FurinaCompanionProps = {
   onSendText?: (text: string) => void;
   canHeadPat?: boolean;
   headPatLocked?: boolean;
-  onHeadPat?: () => void;
+  onHeadPat?: () => boolean;
 };
 
 export function FurinaCompanion({
@@ -263,13 +263,15 @@ export function FurinaCompanion({
 
           <button
             type="button"
-            className="furina-head-hitbox"
+            className={`furina-head-hitbox ${headPatActive ? "head-pat-active" : ""}`}
             onClick={triggerHeadPat}
             disabled={!canHeadPat || headPatLocked || headPatActive}
             aria-label="摸摸头"
-            title={canHeadPat ? "摸摸头" : "当前暂不可互动"}
             data-testid="furina-head-hitbox"
-          />
+          >
+            {/* 键盘聚焦时用手形提示位置，鼠标交互使用原生抓取指针。 */}
+            <Hand className="furina-head-focus-icon" aria-hidden="true" />
+          </button>
         </div>
 
         {/* 右上侧悬浮状态标签与画中画按钮 */}
