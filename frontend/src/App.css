@@ -57,9 +57,9 @@ body,
   position: relative;
   width: min(86vw, 760px, calc(100dvh - 208px));
   height: min(86vw, 760px, calc(100dvh - 208px));
-  transition: transform 0.18s ease;
 }
 
+/* 与抓取反馈同步，轻微晃动后回到原位。 */
 .furina-character-frame.head-pat-active {
   animation: furina-head-pat 0.7s ease-in-out;
 }
@@ -74,6 +74,12 @@ body,
   }
   70% {
     transform: rotate(0.8deg) translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .furina-character-frame.head-pat-active {
+    animation: none;
   }
 }
 
@@ -102,39 +108,44 @@ body,
 
 .furina-head-hitbox {
   position: absolute;
-  left: 34%;
-  top: 10%;
-  width: 32%;
-  height: 26%;
+  /* 头部位于方形视频顶部，触发区随视频等比缩放。 */
+  left: 39%;
+  top: 0;
+  width: 25%;
+  height: 22%;
   z-index: 5;
-  border: 1px solid transparent;
+  padding: 0;
+  border: 0;
   border-radius: 48% 48% 42% 42%;
   background: transparent;
-  cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    background 0.18s ease;
+  cursor: grab;
 }
 
-.furina-head-hitbox:hover:not(:disabled),
-.furina-head-hitbox:focus-visible:not(:disabled) {
-  border-color: rgba(59, 130, 246, 0.5);
-  background: rgba(191, 219, 254, 0.16);
+.furina-head-hitbox:focus-visible {
   outline: none;
+}
+
+.furina-head-focus-icon {
+  display: none;
+  width: 28px;
+  height: 28px;
+  margin: auto;
+  color: #334155;
+  fill: white;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.furina-head-hitbox:focus-visible:not(:disabled) .furina-head-focus-icon {
+  display: block;
 }
 
 .furina-head-hitbox:disabled {
   cursor: default;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .furina-character-frame.head-pat-active {
-    animation: none;
-  }
-
-  .furina-head-hitbox {
-    transition: none;
-  }
+.furina-head-hitbox:active:not(:disabled),
+.furina-head-hitbox.head-pat-active {
+  cursor: grabbing;
 }
 
 .furina-emotion-tag {
