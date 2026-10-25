@@ -458,11 +458,12 @@ func TestLinxMCPSupport(t *testing.T) {
 	go func() {
 		for ev := range s.Events() {
 			if ev.Type == "emotion.changed" {
-				if ev.Emotion == "happy" {
+				switch ev.Emotion {
+				case "happy":
 					gotHappy = true
-				} else if ev.Emotion == "sad" {
+				case "sad":
 					gotSad = true
-				} else if ev.Emotion == "angry" {
+				case "angry":
 					gotAngry = true
 				}
 				if gotHappy && gotSad && gotAngry {

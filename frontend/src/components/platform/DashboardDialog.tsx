@@ -21,7 +21,7 @@ type DashboardDialogProps = {
   emotion?: string;
   muted: boolean;
   lines: ChatLine[];
-  onSendText?: (text: string) => void;
+  onSendText?: (text: string) => boolean;
 };
 
 export function DashboardDialog({
@@ -35,18 +35,13 @@ export function DashboardDialog({
 }: DashboardDialogProps) {
   const [chatText, setChatText] = useState("");
 
-  const isConnected =
-    state === "ready" ||
-    state === "listening" ||
-    state === "speaking" ||
-    state === "processing";
+  const canSendText = state === "ready";
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     const text = chatText.trim();
     if (!text || !onSendText) return;
-    onSendText(text);
-    setChatText("");
+    if (onSendText(text)) setChatText("");
   };
 
   return (
@@ -106,20 +101,20 @@ export function DashboardDialog({
                   type="text"
                   className="dashboard-chat-input"
                   placeholder={
-                    isConnected
+                    canSendText
                       ? "输入文字对芙宁娜说点什么... (Enter 发送)"
                       : "连接就绪后可发送文字消息..."
                   }
                   value={chatText}
                   onChange={(e) => setChatText(e.target.value)}
-                  disabled={!isConnected}
+                  disabled={!canSendText}
                 />
               </div>
               <Button
                 type="submit"
                 size="lg"
                 className="dashboard-chat-send"
-                disabled={!isConnected || !chatText.trim()}
+                disabled={!canSendText || !chatText.trim()}
               >
                 <Send className="size-3.5" />
                 <span>发送</span>

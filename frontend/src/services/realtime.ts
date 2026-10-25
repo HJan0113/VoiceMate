@@ -72,6 +72,15 @@ export class RealtimeClient {
   startTurn(clientTurnId: string): void {
     this.send({ type: "turn.start", clientTurnId });
   }
+
+  startTextTurn(text: string): string | null {
+    if (!text.trim() || !this.isOpen()) return null;
+    const clientTurnId = `turn_${crypto.randomUUID()}`;
+    if (!this.send({ type: "turn.start", clientTurnId })) return null;
+    if (!this.send({ type: "chat.text", text })) return null;
+    return clientTurnId;
+  }
+
   stopTurn(): void {
     this.send({ type: "turn.stop" });
   }
@@ -108,9 +117,15 @@ export class RealtimeClient {
     socket.onmessage = null;
     socket.close();
   }
-  private send(value: object): void {
-    if (this.socket?.readyState === WebSocket.OPEN)
-      this.socket.send(JSON.stringify(value));
+  private send(value: object): boolean {
+    const socket = this.socket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify(value));
+    return true;
+  }
+
+  private isOpen(): boolean {
+    return this.socket?.readyState === WebSocket.OPEN;
   }
   private emit(event: ServerEvent): void {
     this.listeners.forEach((listener) => listener(event));

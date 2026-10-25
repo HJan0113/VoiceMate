@@ -173,11 +173,20 @@ func (s *Server) Handle(c *gin.Context) {
 				_ = writeJSON(gin.H{"type": "turn.interrupted", "turnId": message.TurnID})
 			}
 		case "chat.text":
+			if message.Text == "" {
+				_ = writeJSON(gin.H{"type": "error", "code": "TEXT_REQUIRED"})
+				continue
+			}
 			streamMu.Lock()
 			active := stream
 			streamMu.Unlock()
-			if active != nil && message.Text != "" {
-				_ = active.SendText(message.Text)
+			if active == nil {
+				_ = writeJSON(gin.H{"type": "error", "code": "TURN_REQUIRED"})
+				continue
+			}
+			if err := active.SendText(message.Text); err != nil {
+				closeStream(false)
+				_ = writeJSON(gin.H{"type": "error", "code": "UPSTREAM_UNAVAILABLE", "retryable": true})
 			}
 		case "ping":
 			_ = writeJSON(gin.H{"type": "pong", "ts": time.Now().UnixMilli()})

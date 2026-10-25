@@ -180,6 +180,7 @@ paths:
           - $ref: '#/components/schemas/WsTurnStartMessage'
           - $ref: '#/components/schemas/WsTurnStopMessage'
           - $ref: '#/components/schemas/WsTurnInterruptMessage'
+          - $ref: '#/components/schemas/WsChatTextMessage'
           - $ref: '#/components/schemas/WsPingMessage'
         serverMessages:
           - $ref: '#/components/schemas/WsSessionReadyMessage'
@@ -432,6 +433,17 @@ components:
           const: turn.interrupt
         turnId:
           type: string
+
+    WsChatTextMessage:
+      type: object
+      required: [type, text]
+      properties:
+        type:
+          type: string
+          const: chat.text
+        text:
+          type: string
+          minLength: 1
 
     WsPingMessage:
       type: object

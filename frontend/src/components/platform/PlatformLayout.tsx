@@ -19,7 +19,7 @@ type PlatformLayoutProps = {
   onToggleMute: () => void;
   onStartVoice: () => void;
   onStopVoice: () => void;
-  onSendText?: (text: string) => void;
+  onSendText?: (text: string) => boolean;
 };
 
 export function PlatformLayout({
